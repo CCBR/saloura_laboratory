@@ -24,8 +24,7 @@ ignore_groups=c("CRISPR_52_with_IFNb","CRISPR_53_with_IFNb","parental_HN6_with_I
 cntrl="parental_HN6_without_IFNb"
 
 # Threshold values
-log_cutoff=1.5
-fc_cutoff=1.5
+log2fc_cutoff=1.5
 padj_cutoff=0.05
 species_in = "Homo sapiens" #either "Homo sapiens" or "Mus musculus"
 analysis_type = "DESeq2" #either limma or DESeq2

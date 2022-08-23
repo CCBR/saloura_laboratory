@@ -100,7 +100,7 @@ create_sig_gene_df<-function(cntrl_in,treat_in,n_in){
   res1=read.csv(paste0(output_dir,"DESeq2_",contras[1],"-", contras[2],"_DEG_allgenes_res1.txt"),sep="\t")
   
   # subset for sig genes
-  sub_res1=subset(res1,(log2FoldChange>log_cutoff) | (log2FoldChange<log_cutoff))
+  sub_res1=subset(res1,(log2FoldChange>log2fc_cutoff) | (log2FoldChange<log2fc_cutoff))
   sub_res1=subset(sub_res1,padj<padj_cutoff)
   
   # subset for top X genes
@@ -286,9 +286,9 @@ generate_volcano_plots<-function(cntrl_in,treat_in,type_in){
   }
   log_FC=res1$log2FoldChange
   Significant=rep("1_NotSignificant",length(log_FC))
-  Significant[which(res1$pvalue<padj_cutoff & abs(res1$log2FoldChange)>=log_cutoff)]=paste0("3_LogFC_and_",type_in)
-  Significant[which(res1$pvalue<padj_cutoff & abs(res1$log2FoldChange)<log_cutoff)]=paste0("2b_",type_in,"_Only")
-  Significant[which(res1$pvalue>=padj_cutoff & abs(res1$log2FoldChange)>=log_cutoff)]="2a_LogFC_Only"
+  Significant[which(res1$pvalue<padj_cutoff & abs(res1$log2FoldChange)>=log2fc_cutoff)]=paste0("3_LogFC_and_",type_in)
+  Significant[which(res1$pvalue<padj_cutoff & abs(res1$log2FoldChange)<log2fc_cutoff)]=paste0("2b_",type_in,"_Only")
+  Significant[which(res1$pvalue>=padj_cutoff & abs(res1$log2FoldChange)>=log2fc_cutoff)]="2a_LogFC_Only"
   gene=res1$X
   volcano_data=as.data.frame(cbind(gene,log_FC,log_pval,Significant))
   p <- plot_ly(data = volcano_data, x = log_FC, y = log_pval, text = gene,
@@ -701,7 +701,7 @@ main_gsea_ora_function<-function(cntrl_in,treat_in,db_list,top_path_value,ORA_fl
   if (ORA_flag=="ON"){
     # create ORA genelist
     siggenes=subset(deg,fdr <= padj_cutoff)
-    siggenes=subset(deg,(fc < -fc_cutoff) | (fc > fc_cutoff))
+    siggenes=subset(deg,(fc < -log2fc_cutoff) | (fc > log2fc_cutoff))
     sigGeneList=siggenes$gene
     
     # for each annotation db, run ORA, save plots
@@ -755,7 +755,7 @@ generate_heat_map_select<-function(select_deg,contras){
   colnames(select_deg)=c(log_name,p_name)
   
   # create heatmap df of sig genes in pathway list
-  sig_df=subset(select_deg, get(log_name) > log_cutoff | get(log_name) < -log_cutoff)
+  sig_df=subset(select_deg, get(log_name) > log2fc_cutoff | get(log_name) < -log2fc_cutoff)
   sig_df=subset(sig_df, get(p_name) < padj_cutoff )
   heat_df=create_heatmap_df(sig_df,"")
   
