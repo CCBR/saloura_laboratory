@@ -1,21 +1,63 @@
 ---
 title: "CCBR1155 CS028891 RNA Analysis"
 author: "Samantha Sevilla"
-date: '2022-07-19'
+date: '2022-08-23'
 output: html_document
 editor_options: 
   chunk_output_type: console
 ---
 
+
+```{r setup, include=FALSE}
+#dirs
+parent_dir="~/../../Volumes/ccbr1155/"
+input_dir = "~/../../Volumes/ccbr1155/CS028891/pipeliner_220713/"
+output_dir = "~/../../Volumes/ccbr1155/CS028891/r_analysis_220822/"
+dir.create(file.path(output_dir), showWarnings = FALSE)
+```
+
+```{r thresholds}
+# group to ignore
+ignore_groups=c("CRISPR_52_with_IFNb","CRISPR_53_with_IFNb","parental_HN6_with_IFNb")
+
+#cntrl
+cntrl="parental_HN6_without_IFNb"
+
+# Threshold values
+log_cutoff=1.5
+fc_cutoff=1.5
+padj_cutoff=0.05
+species_in = "Homo sapiens" #either "Homo sapiens" or "Mus musculus"
+analysis_type = "DESeq2" #either limma or DESeq2
+
+#databases to include in analysis options include:
+#http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+#"C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H"
+db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H")
+
+```
+
 ```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
+#species db
+if (species_in == "Homo sapiens"){
+  species_db="org.Hs.eg.db"
+} else if (species_in == "Mus musculus"){
+  species_db="org.Mm.eg.db"
+} else{
+    print("Species not approved")
+}
+
 # package list
 list.of.packages=c("BiocManager","tidyr","DT","RUVSeq","RColorBrewer","textshape",
                    "pheatmap","grid","dplyr","EnhancedVolcano","edgeR","DESeq2","ggplot2","plotly",
-                   "msigdbr","clusterProfiler","ggpubr","ggridges")
+                   "msigdbr","clusterProfiler","ggpubr","ggridges","factoextra","gplots","ReactomePA",species_db)
 
 #install as needed
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) BiocManager::install(new.packages)
+
+# source functions
+source('RNASeq_core_functions.R')
 
 # load packages
 invisible(lapply(list.of.packages, library, character.only = TRUE))
@@ -24,25 +66,6 @@ invisible(lapply(list.of.packages, library, character.only = TRUE))
 `%ni%` <- Negate(`%in%`)
 ```
 
-```{r setup, include=FALSE}
-#dirs
-parent_dir="~/../../Volumes/ccbr1155/"
-input_dir = "~/../../Volumes/ccbr1155/CS028891/pipeliner_220713/"
-output_dir = "~/../../Volumes/ccbr1155/CS028891/r_analysis/"
-dir.create(file.path(output_dir), showWarnings = FALSE)
-
-# group to ignore
-ignore_groups=c("CRISPR_52_with_IFNb","CRISPR_53_with_IFNb","parental_HN6_with_IFNb")
-```
-
-```{r thresholds}
-# Threshold values
-log_cutoff=1.5
-fc_cutoff=1.5
-padj_cutoff=0.05
-species_in = "Homo sapiens"
-analysis_type = "DESeq2" #either limma or DESeq2
-```
 
 ## **Data Processing**
 
@@ -66,7 +89,7 @@ pi_gene_df = read.csv(gene_file)
 contrast_df=read.csv(paste0(input_dir,"contrasts.tab"),header=FALSE,sep="\t")
 contrast_df$V1=gsub("  "," ",contrast_df$V1)
 contrast_df$V1=gsub("  "," ",contrast_df$V1)
-contrast_df=contrast_df %>% separate(V1, c('CNTRL', 'TREATMENT'),sep=" ")
+colnames(contrast_df)=c("CNTRL","TREATMENT")
 contrast_df$contrast=paste0(contrast_df$CNTRL,"_vs_",contrast_df$TREATMENT)
 
 #filter
@@ -87,12 +110,6 @@ DT::datatable(contrast_df)
 Raw counts are read in and filtered by counts per million reads (CPM). Filtering thresholds are set such that at least two samples must have a CPM of >0.5 to be reviewed. Two plots were generated for each sample: Relative log expression (RLE) plots and Principal Coordinate Analysis (PCA) plots.
 
 ```{r raw_run, echo=FALSE, warning=FALSE, message=FALSE}
-# shorten colnmaes
-shorten_names<-function(list_in){
-  shortened_names=sub("_without_IFNb", '',list_in)
-  return(shortened_names)
-}
-
 #load counts
 raw_counts= read.csv(paste0(input_dir,"DEG_ALL/",RSEM_file),sep="\t")
 raw_counts=raw_counts[,c("symbol",groups_df$sampleid)]
@@ -148,289 +165,29 @@ dds <- DESeq(dds)
 par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
 plotRLE(counts(dds, normalize=TRUE), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
 plotPCA(counts(dds,normalize=TRUE), col=colors[x], cex=.8)
-mtext("Fig. DESEq Normalization", side=2, outer=TRUE, adj=0)
+mtext("Fig. DESEq2 Normalization", side=2, outer=TRUE, adj=0)
 ```
 
 The data used for downstream analysis was DESEQ2 normalized and comparisons were made between samples.
 
-```{r deg_fun, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
-####################
-# function DE
-####################
-deg_comparison<-function(cntrl_in,treat_in){
-  contras=c(treat_in,cntrl_in)
-
-  # subset sample info for contrasts
-  full_contrast=paste0(cntrl_in,"-",treat_in)
-  sub_df=subset(groups_df,group %in% contras)
-  sampleinfo= data.frame(sub_df$group,row.names = sub_df$sampleid)
-  colnames(sampleinfo)=c("condition")
-  sampleinfo$condition=as.factor(sampleinfo$condition)
-
-  # read in Raw count file
-  # example: DEG_parental_HN6_without_IFNb-CRISPR_53_without_IFNb_0.5_0.5/RawCountFile_RSEM_genes_filtered.txt
-  x=read.csv(paste0(input_dir,"DEG_",cntrl_in,"-",
-                    treat_in,"_0.5_0.5/RawCountFile_RSEM_genes_filtered.txt"),sep="\t")
-  rownames(x)=x$symbol
-  x=x[,c(2:ncol(x))]
-  
-  # run DESEQ
-  ddsHTSeq<-DESeqDataSetFromMatrix(countData=x,colData=sampleinfo, design=~condition)
-  dds<-DESeq(ddsHTSeq)
-  
-  # prep df
-  mfc=c()
-  mpval=c()
-  i=1
-  
-  # pull results for conditions
-  res<-results(dds,contrast=c("condition",as.character(contras[1]),as.character(contras[2])))
-  res1=as.data.frame(res)
-  write.table(res1,
-              file=paste(output_dir,"DESeq2_DEG_",contras[1],"-",
-                                contras[2],"_all_genes_res1.txt",
-                                sep=""),
-              sep="\t",col.names=NA) 
-  restmp=res1
-  
-  # calc fc, create inital df
-  restmp$FoldChange <- ifelse(restmp$log2FoldChange<0, -1/(2^restmp$log2FoldChange), 2^restmp$log2FoldChange)
-  mfc=cbind(mfc,restmp$FoldChange)
-  mpval=cbind(mpval,restmp$pvalue)
-  
-  x=rownames(restmp)
-  ensID=apply(array(as.character(x)),1,function(z) unlist(strsplit(z, "\\|"))[1])
-  gene=apply(array(as.character(x)),1,function(z) unlist(strsplit(z, "\\|"))[2])
-  restmp=cbind(ensID,gene,restmp)
-
-  #remove rownames for df merging downstream
-  deseq2out=restmp
-  deseq2out$X=rownames(deseq2out)
-
-  #subselect df, recalc new values
-  deseq2out=deseq2out[,which(names(deseq2out) %in% c("X", "gene","log2FoldChange","pvalue"))]
-  deseq2out$fc=2^deseq2out$log2FoldChange
-  down_reg=deseq2out$log2FoldChange<0
-  deseq2out$fc[down_reg]=-1/deseq2out$fc[down_reg]
-  
-  # pull final values
-  deseq2out=deseq2out[,c("X","gene","fc","log2FoldChange","pvalue")]
-  colnames(deseq2out)=c("ensid_gene","gene","fc","log2fc","pvalue")
-  deseq2out$fdr=p.adjust(deseq2out$pvalue,method='fdr',n=length(deseq2out$pvalue))
-  deseq2out$gsea_ranking_score=-log10(deseq2out$pvalue)*sign(deseq2out$log2fc)
-  write.table(deseq2out,file=paste(output_dir,"DESeq2_DEG_",contras[1],"-",
-                                   contras[2],"_all_genes.txt",sep=""),
-              row.names=FALSE,col.names=TRUE,quote=FALSE,sep="\t")
-  return(deseq2out)
-}
-
-deg_group_add<-function(cntrl_in,treat_in){
-  # run DESE2
-  res_comp<-deg_comparison(cntrl_in,treat_in)
-  
-  # rename cols with sampleid
-  tmp_deg=as.data.frame(res_comp)
-  colnames(tmp_deg)=paste0(treat_in,"_",colnames(tmp_deg))
-}
-```
-
 ```{r deg_run, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_52_without_IFNb"
 deg_group_add(cntrl,treatment)
 
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_53_without_IFNb"
 deg_group_add(cntrl,treatment)
 ```
 
 ## **Heatmaps**
 
-```{r include=FALSE, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
-####################
-# functions heatmaps
-###################
-# creates gene df of top n_in significant genes per sample
-create_sig_gene_df<-function(cntrl_in,treat_in,n_in){
-  #set contrasat
-  contras=c(treat_in,cntrl_in)
-  
-  #read in path
-  source_path=paste0(input_dir,"DEG_",contras[1],"-",contras[2],"_0.5_0.5/")
-  res1=read.csv(paste0(output_dir,"DESeq2_DEG_",contras[1],"-", contras[2],"_all_genes_res1.txt"),sep="\t")
-  
-  # subset for sig genes
-  sub_res1=subset(res1,(log2FoldChange>log_cutoff) | (log2FoldChange<log_cutoff))
-  sub_res1=subset(sub_res1,padj<padj_cutoff)
-  
-  # subset for top X genes
-  sub_top_fc=sub_res1[order(sub_res1$padj),][c(1:n_in),]
-  
-  #select cols, rename
-  sub_top_fc=sub_top_fc[,c("X","log2FoldChange","padj")]
-  colnames(sub_top_fc)=c("genes",
-                         paste0(contras[1],"_vs_",contras[2],"--log2FoldChange"),
-                         paste0(contras[1],"_vs_",contras[2],"--padj"))
-  
-  return(sub_top_fc)
-}
-
-# fills in df for other samples
-fillin_sig_gene_df<-function(df_in){
-  df_in=merged_fc
-  
-  rownames(df_in)=df_in$genes
-  df_in <- subset(df_in, select = -c(genes))
-
-  head(df_in)
-  
-  
-  # for each column, search through and fill in any NA's
-  for (colid in colnames(df_in)){
-    # pull all NA values for this column
-    df_in[df_in=='NA'] <- NA
-    missing_rows=rownames(df_in[is.na(df_in[,colid]),])
-    
-    #read in path
-    contras=strsplit(strsplit(colid,"--")[[1]],"_vs_")
-    source_path=paste0(input_dir,"DEG_",contras[[1]][1],"-",contras[[1]][2],"_0.5_0.5/")
-    res1=read.csv(paste0(output_dir,"DESeq2_DEG_",
-                         contras[[1]][1],"-", contras[[1]][2],"_all_genes_res1.txt"),sep="\t")
-    rownames(res1)=res1$X
-    
-    # fill in missing information
-    for (rowid in missing_rows){
-        df_in[rowid,colid]=res1[rowid,"log2FoldChange"]
-    }
-  }
-  
-  return(df_in)
-}
-
-# creates heatmap formatted df with only log2fc values
-create_heatmap_df<-function(df_in,extra_filter=""){
-  df_out=select(df_in,contains("log"))
-  
-  # cleanup col names
-  output_list=sub('--log2FoldChange', '',colnames(df_out))
-  cntrl=strsplit(output_list,"_vs_")
-  for (ct in cntrl){
-    output_list=sub(ct[2], '',output_list)
-    output_list=sub('_vs_', '',output_list)
-  }
-  
-  # use extra filter
-  if (extra_filter != ""){
-    output_list=sub(extra_filter, '',output_list)
-  }
-  
-  colnames(df_out)=output_list
-  return(df_out)
-}
-
-# creates df of log2fc and pvalues
-create_output_df<-function(df_in,n_in,extra_filter=""){
-  output_list=colnames(df_in)
-  
-  # split treat from control
-  cntrl=strsplit(output_list,"_vs_")
-  for (ct in cntrl){
-    metric=strsplit(ct[2],"--")[[1]][2]
-    output_list=sub(ct[2], paste0("_",metric),output_list)
-    output_list=sub('_vs_', '',output_list)
-  }
-  
-  # cleanup col names
-  output_list=sub('log2FoldChange', 'log2FC',output_list)
-
-  # use extra filter
-  extra_filter="_without_IFNb"
-  if (extra_filter != ""){
-    output_list=sub(extra_filter, '',output_list)
-  }
-  
-  colnames(df_in)=output_list
-  
-  # round df
-  for (colid in colnames(df_in)){
-    df_in[,colid]=signif(df_in[,colid], digits=3)
-  }
-  
-  # print out table
-  caption_title=paste0("Expression values for top ",n_in," genes, per sample")
-  p = DT::datatable(df_in, extensions = 'Responsive', 
-                              caption=htmltools::tags$caption(paste0(caption_title) ,
-                                                              style="color:gray; font-size: 18px" ))
-  return(p)
-}
-
-# Overwrites the pheatmap defaults
-draw_colnames_45 <- function (coln, gaps, ...) {
-  "Overwrites body of pheatmap:::draw_colnames, customizing it my liking"
-  coord = pheatmap:::find_coordinates(length(coln), gaps)
-  x = coord$coord - 0.5 * coord$size
-  res = textGrob(coln, x = x, y = unit(1, "npc") - unit(3,"bigpts"), vjust = 0.5, hjust = 1, rot = 45, gp = gpar(...))
-  return(res)
-}
-
-# creates heatmap
-generate_heat_map<-function(df_in,show_names="ON"){
-
-  ####################
-  # formatting
-  #####################
-  # Overwrite pheatmaps default draw_colnames with new version
-  assignInNamespace(x="draw_colnames", value="draw_colnames_45",ns=asNamespace("pheatmap")) 
-  
-  # Heatmap Color Gradients 
-  paletteLength <- 1000
-  mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
-  
-  ####################
-  # metadata
-  ####################
-  # Creating Dataframe to map samplenames to groups
-  meta = groups_df
-  groups <- data.frame(as.factor(meta$group))
-  colnames(groups) <- "Groups"
-  rownames(groups) <- meta$sampleid
-  
-  # Creating Group Column Annotation Colors
-  columnColors <- c("lightpink","lightblue","orange","purple","red","green")
-  names(columnColors) <- unique(groups$Groups)
-  anno_colors <- list(Groups = columnColors)
-  
-  # set title
-  title_in=paste0("Significant Genes (N=",nrow(df_in),"), per sample")
-  
-  ####################
-  # function
-  ####################
-  if (show_names=="OFF"){
-    pheatmap(df_in, 
-             scale = "none", main=title_in,
-             cellwidth = 30, fontsize = 12, fontsize_row = 7, fontsize_col = 8, color = mycolors, 
-             border_color = "NA",cluster_cols=F,annotation_colors = anno_colors, show_rownames = FALSE)
-  } else{
-    pheatmap(df_in, 
-             scale = "none", main=title_in,
-             cellwidth = 30, fontsize = 12, fontsize_row = 7, fontsize_col = 8, color = mycolors, 
-             border_color = "NA",cluster_cols=F,annotation_colors = anno_colors, show_rownames = TRUE)
-  }
-
-}
-```
-
 ```{r echo=FALSE,warning=FALSE, message=FALSE}
 ####################
 # run heatmaps
 ###################
 # find significant genes
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_52_without_IFNb"
 merged_fc=create_sig_gene_df(cntrl,treatment,25)
 
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_53_without_IFNb"
 merged_fc=full_join(merged_fc,create_sig_gene_df(cntrl,treatment,25))
 
@@ -451,52 +208,9 @@ generate_heat_map(heatmap_df)
 
 Volcano plots are created to show the statistical significance (p-value or FDR) versus magnitude of change (fold change).
 
-```{r echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
-####################
-# functions volcano plots
-###################
-generate_volcano_plots<-function(cntrl_in,treat_in,type_in){
-  cntrl_in=cntrl
-  treat_in=treatment
-  i = 1
-  
-  contras=c(treat_in,cntrl_in)
-  source_path=paste0(input_dir,"DEG_",cntrl_in,"-",treat_in,"_0.5_0.5/")
-  res1=read.csv(paste0(output_dir,"DESeq2_DEG_",contras[1],"-", contras[2],"_all_genes_res1.txt"),sep="\t")
-    
-  # Volcano Plots
-  if (type_in=="pvalue"){
-    log_pval=-log10(res1$pvalue)
-    y_title="-Log10 pvalue"
-  } else{
-    ## logfc and FDR
-    log_pval=-log10(res1$padj)
-    y_title="-Log10 FDR"
-  }
-  log_FC=res1$log2FoldChange
-  Significant=rep("NotSignificant",length(log_FC))
-  Significant[which(res1$pvalue<padj_cutoff & abs(res1$log2FoldChange)>=log_cutoff)]="Significant&LogFoldChange"
-  Significant[which(res1$pvalue<padj_cutoff & abs(res1$log2FoldChange)<log_cutoff)]="Significant"
-  Significant[which(res1$pvalue>=padj_cutoff & abs(res1$log2FoldChange)>=log_cutoff)]="LogFoldChange"
-  gene=res1$X
-  volcano_data=as.data.frame(cbind(gene,log_FC,log_pval,Significant))
-  p <- plot_ly(data = volcano_data, x = log_FC, y = log_pval, text = gene,
-                    mode = "markers", 
-                    color = Significant) %>% layout(title =paste0(contras[1]," vs. ", contras[2]),
-                                                    xaxis=list(title="Fold Change",
-                                                               range =c(-5,5),
-                                                               tickvals=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
-                                                               ticktext=c('-32','-16','-8','-4','-2',
-                                                                          '1','2','4','8','16','32')),
-                                                    yaxis=list(title=y_title,range =c(0,15)))
-  return(p)
-}
-```
-
 ### CRISPR_52_without_IFNb {.tabset}
 #### p-value
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_52_without_IFNb"
 type_in="pvalue"
 generate_volcano_plots(cntrl,treatment,type_in)
@@ -504,16 +218,14 @@ generate_volcano_plots(cntrl,treatment,type_in)
 
 #### FDR
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_52_without_IFNb"
-type_in="FRD"
+type_in="FDR"
 generate_volcano_plots(cntrl,treatment,type_in)
 ```
 
 ### CRISPR_53_without_IFNb {.tabset}
 #### p-value
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_53_without_IFNb"
 type_in="pvalue"
 generate_volcano_plots(cntrl,treatment,type_in)
@@ -521,9 +233,8 @@ generate_volcano_plots(cntrl,treatment,type_in)
 
 #### FDR
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_53_without_IFNb"
-type_in="FRD"
+type_in="FDR"
 generate_volcano_plots(cntrl,treatment,type_in)
 ```
 
@@ -535,302 +246,26 @@ the enrichment scores (p values) and gene ratio as color and size, respectively.
 Ridgeplots are also visualize enriched terms and their expression distributions 
 of core enriched genes.
 
-```{r oragsea_fun, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
-######################################################################
-# functions ORA/GSEA
-######################################################################
-#set genelist for GSEA
-deg2geneList<-function(deg){
-  gl=as.data.frame(deg$gsea_ranking_score)
-  gl$GN=deg$gene
-  colnames(gl)=c("Rank","GeneName")
-  
-  # handle infinitiy
-  if (analysis_type=="DESeq2"){
-    # remove NA and inf values from rank col
-    clean_list=gl$Rank
-    clean_list=clean_list[!is.na(clean_list)]
-    clean_list=clean_list[clean_list != "Inf"]
-    clean_list=clean_list[clean_list != "-Inf"]
+### Enrichment {.tabset}
 
-    # set inf and -inf to the max/min values x 1.5
-    gl[gl == "Inf"]<-max(clean_list)*1.5
-    gl[gl == "-Inf"]<-min(clean_list)*1.5
-  }
-
-  gl$absRank=abs(gl$Rank)
-  gl=gl[order(gl$absRank,decreasing = TRUE),]
-  gl=gl[match(unique(gl$GeneName),gl$GeneName),]
-  geneList=gl$Rank
-  names(geneList)=as.character(gl$GeneName)
-  geneList <- sort(geneList, decreasing = TRUE)
-  return(geneList)
-}
-
-# set the annotation dbs
-db_lookup<-function(t2g){
-  # generate gene lists for C1
-  # generate gene lists for C2 with subtypes biocarta, kegg, reactome, wiki
-  # generate gene lists for C5 with subtypes MF, BP, CC
-   # generate gene lists for Hallmark
-  if (t2g=="C1"){
-    db_out=msigdbr(species = species_in, category = "C1") %>% 
-      dplyr::select(gs_name,gene_symbol)
-  } else if (t2g=="C2:BIOCARTA"){
-    db_out=msigdbr(species = species_in, category = "C2", subcategory = "BIOCARTA") %>% 
-      dplyr::select(gs_name,gene_symbol)
-  } else if (t2g=="C2:KEGG"){
-    db_out=msigdbr(species = species_in, category = "C2", subcategory = "KEGG") %>% 
-      dplyr::select(gs_name,gene_symbol)
-  } else if (t2g=="C2:REACTOME"){
-    db_out=msigdbr(species = species_in, category = "C2", subcategory = "REACTOME") %>%
-      dplyr::select(gs_name,gene_symbol)
-  } else if (t2g=="C2:WIKIPATHWAYS"){
-    db_out=msigdbr(species = species_in, category = "C2", subcategory = "WIKIPATHWAYS") %>%
-      dplyr::select(gs_name,gene_symbol)
-  } else if (t2g=="C5:MF"){
-    db_out=msigdbr(species = species_in,  category = "C5", subcategory = "GO:MF") %>%
-      dplyr::select(gs_name,gene_symbol)
-  } else if (t2g=="C5:BP"){
-    db_out=msigdbr(species = species_in,  category = "C5", subcategory = "GO:BP") %>%
-      dplyr::select(gs_name,gene_symbol)
-  } else if (t2g=="C5:CC"){
-    db_out=msigdbr(species = species_in,  category = "C5", subcategory = "GO:CC") %>%
-      dplyr::select(gs_name,gene_symbol)
-  } else if (t2g=="H"){
-    db_out=msigdbr(species = species_in, category = "H") %>% 
-      dplyr::select(gs_name,gene_symbol)  
-  } else{
-    print("DB does not exist. Please review")
-  }
-
- return(db_out)
-}
-
-# plot ORA
-ora_plus_plot <- function(gl,t2g,contrast_in){
-  pulled_db=db_lookup(t2g)
-  result=enricher(gene=gl, TERM2GENE=pulled_db, pvalueCutoff = padj_cutoff)
-  resultdf=as.data.frame(result)
-  
-  ttl_abbrev=sub(" ","_",sub(":","_",t2g))
-  fpath=paste0(output_dir,contrast_in[1],"-",contrast_in[2],"_ORA_",ttl_abbrev,".txt")
-  write.table(resultdf,file=fpath,quote=FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
-  
-  if(nrow(resultdf)==0){
-    p1 = ggparagraph( paste0("\n\n\n No Sig Results for ", "ORA:",t2g,"\n-",contrast_in[1]), 
-                      color = NULL, size = 20, face = "bold", 
-                      family = NULL, lineheight = NULL)
-  } else{
-    p1 = dotplot(result,
-                 title=paste0("ORA:",t2g,"\n",contrast_in),
-                 font.size = 7, showCategory=3)
-  }
-  return(p1)
-}
-
-# plot GSEA
-gsea_plus_plot <- function(gl,t2g,contrast_in){
-  pulled_db=db_lookup(t2g)
-  result=GSEA(geneList = gl,TERM2GENE = pulled_db,eps = 0, pvalueCutoff = padj_cutoff)
-  resultdf=as.data.frame(result)
-  
-  ttl_abbrev=sub(" ","_",sub(":","_",t2g))
-  fpath=paste0(output_dir,contrast_in[1],"-",contrast_in[2],"_GSEA_",ttl_abbrev,".txt")
-  write.table(resultdf,file=fpath,quote=FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
-  
-  if(nrow(result)==0){
-    p1 = ggparagraph( paste0("\n\n\n No Sig Results for ", "GSEA:",t2g,"\n-",contrast_in[1]), 
-                      color = NULL, size = 20, face = "bold", 
-                      family = NULL, lineheight = NULL)
-  } else{
-    p1 = dotplot(result,
-                 title=paste0(contrast_in,"\n","GSEA:",t2g),
-                 font.size = 6, showCategory=3, split=".sign") +
-      facet_grid(.~.sign)
-    
-    p2=ridgeplot(result, label_format = 20, showCategory = 5, orderBy="p.adjust") + 
-      labs(x = "enrichment distribution for top 5 pathways") 
-    p3=p2+theme(text = element_text(size=9),
-        axis.text.x = element_text(size=9),
-        axis.text.y = element_text(size=9)) 
-    
-    pf=cowplot::plot_grid(p1,p3,ncol=1)
-  }
-  
-  return(pf)
-}
-
-# save plots
-print_save_plots<-function(plot_list,contrast_id,type_in){
-  # set figure caption letter
-  p=1
-  
-  for (i in seq(from=1,to=length(plot_list),by=2)){
-    pf = cowplot::plot_grid(plot_list[[i]],
-                            ncol=1, labels=LETTERS[p])
-    
-    #print and save
-    print(pf)
-    ggsave(filename = paste0(output_dir, contrast_id[1],"-",contrast_id[2], 
-                             "_dotplot_",type_in,"_",LETTERS[p],".png"), 
-           height = 8.90, width = 12.80, device = "png", plot = pf)
-    
-    # increase counter
-    p=p+1
-  }
-}
-
-# create output dt
-create_dts<-function(type_in,t2g,contras,n_in,db_list){
-
-  # read in datatable created during GSEA/ORA plotting
-  merged_df=data.frame()
-  for (t2g in db_list){
-    ttl_abbrev=sub(" ","_",sub(":","_",t2g))
-    fpath=paste0(output_dir,contras[1],"-",contras[2],"_",type_in,"_",ttl_abbrev,".txt")
-    tmp_df=read.csv(fpath,sep="\t")
-    
-    # if there are no signifcant pathways, skip
-    if (nrow(tmp_df)==0){ next }
-    
-    tmp_df$anno=t2g
-    
-    # merge
-    merged_df=rbind(merged_df,tmp_df)
-  }
-  
-  # split leading_edge col into three
-  if (type_in=="GSEA"){
-    merged_df=separate(
-      merged_df,
-      leading_edge,
-      c("percent_included","percent_list","percent_signal"),
-      sep=", "
-    )
-    # remove value= in cols
-    merged_df$percent_included=sub("tags=","",merged_df$percent_included)
-    merged_df$percent_list=sub("list=","",merged_df$percent_list)
-    merged_df$percent_signal=sub("signal=","",merged_df$percent_signal)
-    
-    # round cols
-    col_list=c("p.adjust","enrichmentScore","NES")
-    for (colid in col_list){
-      merged_df[,colid]=signif(merged_df[,colid], digits=3)
-    }
-
-    # select cols
-    output_df=merged_df[,c("anno","ID","setSize","percent_included","p.adjust",
-                           "enrichmentScore","NES","core_enrichment")]
-    colnames(output_df)=c("anno_db","ID","total_genes","percent_included","p.adj",
-                          "enrichmentScore","NES","genes_included")
-  } else{
-    # pull values for genes included, genes in set
-    merged_df=separate(
-      merged_df,
-      BgRatio,
-      c("set_total","n_bgratio"),
-      sep="/"
-    )
-    # calculate percent genes included
-    merged_df$set_total=as.numeric(merged_df$set_total)
-    merged_df$percent_included=(merged_df$Count/merged_df$set_total)*100
-    
-    #round cols
-    col_list=c("pvalue","p.adjust","qvalue","percent_included")
-    for (colid in col_list){
-      merged_df[,colid]=signif(merged_df[,colid], digits=3)
-    }
-    merged_df$percent_included=paste0(merged_df$percent_included,"%")
-
-    # select cols
-    output_df=merged_df[,c("anno","ID","set_total","percent_included","p.adjust","geneID")]
-    colnames(output_df)=c("anno_db","ID","total_genes","percent_included","p.adj","genes_included")
-  }
-  # sort by p.adjust
-  output_df=output_df[order(output_df$p.adj),]
-  
-  # create DT
-  caption_title=paste0("Top ", n_in, " Pathways for all annotations (", type_in, ")\n")
-  p <- DT::datatable(output_df[1:n_in,], extensions = 'Responsive', 
-                            caption=htmltools::tags$caption(paste0(caption_title, contras[1],"_vs_", contras[2]) ,
-                                                            style="color:gray; font-size: 18px" ),rownames=F)
-  return(p)
-}
-
-# main function
-main_function<-function(cntrl_in,treat_in,db_list,top_path_value,ORA_flag="",GSEA_flag=""){
-  # set contrast
-  contras=c(treat_in,cntrl_in)
-  
-  # read in deg
-  deg_file = paste0(input_dir, "DEG_", contras[1],"-",contras[2],"_0.5_0.5/",analysis_type,
-                    "_DEG_",contras[1],"-",contras[2],"_all_genes.txt")
-  deg=read.csv(deg_file,header=TRUE,sep="\t")
-  
-  # run ORA
-  o=list()
-  if (ORA_flag=="ON"){
-      # create ORA genelist
-    siggenes=subset(deg,fdr <= padj_cutoff)
-    siggenes=subset(deg,(fc < -fc_cutoff) | (fc > fc_cutoff))
-    sigGeneList=siggenes$gene
-
-    # for each annotation db, run ORA, save plots
-    i=1
-    for (db_id in db_list){
-      o[[i]]=ora_plus_plot(gl=sigGeneList,t2g=db_id,contrast_in=contras)
-      i=i+1
-    }
-    
-    # print,save plots
-    print_save_plots(o,contras,"ORA")
-
-    # print DT
-    create_dts("ORA",t2g,contras,top_path_value,db_list)
-  }
-  
-  # run GSEA
-  g=list()
-  if (GSEA_flag=="ON"){
-    # create GSEA genelist
-    gsea_genelist=deg2geneList(deg)
-    
-    #for each annotation db, run GSEA, save plots
-    i=1
-    for (db_id in db_list){
-      g[[i]]=gsea_plus_plot(gl=gsea_genelist,t2g=db_id,contrast_in=contras)
-      i=i+1
-    }
-
-    # print,save plots
-    print_save_plots(g,contras,"GSEA")
-
-    # print DT
-    create_dts("GSEA",t2g,contras,top_path_value,db_list)
-  }
-}
-
-```
-
-```{r oragsea_run, echo=FALSE, message=FALSE, warning=FALSE}
+#### CRISPR_52
+```{r oragsea_run1, echo=FALSE, message=FALSE, warning=FALSE}
 ######################################################################
 # run ORA/GSEA
 ######################################################################
-db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H")
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_52_without_IFNb"
-main_function(cntrl_in=cntrl,
+main_gsea_ora_function(cntrl_in=cntrl,
               treat_in=treatment,
               db_list,
               top_path_value=50,
               ORA_flag = "OFF",
               GSEA_flag = "ON")
+```
 
-db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H")
-cntrl="parental_HN6_without_IFNb"
+#### CRISPR_53
+```{r oragsea_run2, echo=FALSE, message=FALSE, warning=FALSE}
 treatment="CRISPR_53_without_IFNb"
-main_function(cntrl_in=cntrl,
+main_gsea_ora_function(cntrl_in=cntrl,
               treat_in=treatment,
               db_list,
               top_path_value=50,
@@ -840,126 +275,16 @@ main_function(cntrl_in=cntrl,
 
 ## **Selected Pathways** 
 
-Pathways of interest can be reviewed per sample. For example, pathway "chr6p21" from database "C1" is reviewed below. All significant genes that were implicated in this pathway were plotted in a heatmap, as well as a in a GSEA plot. Finally, a datatable of all genes are provided for review.
+Pathways of interest can be reviewed per sample. For example, pathway "chr18q21" from database "C1" is reviewed below. All significant genes that were implicated in this pathway were plotted in a heatmap, as well as a in a GSEA plot. Finally, a data table of all genes are provided for review.
 
-```{r selectpath_fun, echo=FALSE, include=FALSE, message=FALSE, warning=FALSE}
-######################################################################
-# functions secondary pathway analysis
-######################################################################
-#create heatmap and DT
-create_select_heatmaps<-function(select_deg,contras){
-  # prep df for heatmap generation
-  rownames(select_deg)=select_deg$ensid_gene
-  log_name=paste0(contras[1],"_vs_",contras[2],"--log2FoldChange")
-  p_name=paste0(contras[1],"_vs_",contras[2],"--padj")
-  select_deg=select_deg[,c("log2fc","fdr")]
-  colnames(select_deg)=c(log_name,p_name)
-  
-  # create heatmap df of sig genes in pathway list
-  sig_df=subset(select_deg, get(log_name) > log_cutoff | get(log_name) < -log_cutoff)
-  sig_df=subset(sig_df, get(p_name) < padj_cutoff )
-  heat_df=create_heatmap_df(sig_df,"_without_IFNb")
-  
-  # run functions
-  generate_heat_map(heat_df)
-  p = create_output_df(select_deg,nrow(select_deg),"_without_IFNb")
-  return(p)
-}
-
-# create gseaplot
-create_gseaplots<-function(deg,t2g,path_id){
-  # create GSEA genelist
-  gsea_genelist=deg2geneList(deg)
-  
-  # pull db and run GSEA results
-  pulled_db=db_lookup(t2g)
-  result=GSEA(geneList = gsea_genelist,TERM2GENE = pulled_db,eps = 0, pvalueCutoff = padj_cutoff)
-  
-  #get rowname of pathway
-  result_df=as.data.frame(result)
-  rownames(result_df) <- NULL
-  row_id=as.numeric(rownames(subset(result_df,Description==path_id))[[1]])
-  
-  # create plot
-  p1=gseaplot(result, by = "all", title = path_id, geneSetID =row_id)
-  print(p1)
-}
-
-main_function_sp<-function(cntrl_in,treat_in,type_in,t2g,path_id){
-  # set contrast
-  contras=c(treat_in,cntrl_in)
-  
-  # read in datatable created during GSEA/ORA plotting, get list of gene names in pathway selected
-  ttl_abbrev=sub(" ","_",sub(":","_",t2g))
-  fpath=paste0(output_dir,contras[1],"-",contras[2],"_",type_in,"_",ttl_abbrev,".txt")
-  path_df=read.csv(fpath,sep="\t")
-  genes_in_pathway=strsplit(subset(path_df,ID==path_id)$core_enrichment,"/")[[1]]
-
-  # read in deg, subset for genes in pathway
-  deg_file = paste0(input_dir, "DEG_", contras[1],"-",contras[2],"_0.5_0.5/",analysis_type,
-                    "_DEG_",contras[1],"-",contras[2],"_all_genes.txt")
-  deg=read.csv(deg_file,header=TRUE,sep="\t")
-  select_deg=subset(deg, gene %in% genes_in_pathway)
-  
-  if (nrow(select_deg)==0){
-    print ("The selected pathway : annotation db is not valid. Please check inputs")
-    exit()
-  }
-  
-  # create heatmaps
-  p = create_select_heatmaps(select_deg,contras)
-  
-  # create gseaPlot
-  create_gseaplots(deg,t2g,path_id)
-  
-  # return DT
-  return(p)
-}
-
-```
-
-```{r selectpath_run, echo=FALSE, message=FALSE, warning=FALSE}
+```{r selectpath_run, echo=FALSE, message=FALSE, warning=FALSE, out.width="50%"}
 ######################################################################
 # run specific pathway analysis
 ######################################################################
-cntrl="parental_HN6_without_IFNb"
 treatment="CRISPR_52_without_IFNb"
-main_function_sp(t2g="C1",
+main_selectpath_function(t2g="C1",
                         type_in="GSEA",
-                        path_id="chr6p21",
+                        path_id="chr18q21",
                        cntrl_in=cntrl,
                        treat_in=treatment)
-```
-
-```{r echo FALSE, include=FALSE}
-####################
-# functions Pathway enrichment analysis
-# not used
-###################
-perform_pathway_analysis<-function(cntrl_in,treat_in,type_in){
-  i=1
-  contras=c(treat_in,cntrl_in)
-  source_path=paste0(input_dir,"DEG_",cntrl_in,"-",treat_in,"_0.5_0.5/")
-  extension=paste0("_",contras[1],"_vs_",contras[2],".txt")
-   
-  mp=read.delim(paste0(source_path,"DESeq2_res_path_",type_in,extension),header=F)
-  colnames(mp)=c("pval","fdr","ratio","nb.hits","nb.genes.path",
-                  "nb.user.genes","tot.back.genes","path_id","source","description","type","gene.list")
-
-  if (type_in=="up"){
-    mp=mp[which(mp[,1]<0.05 & mp[,4]>=5),]
-    caption_title="Pathways for top 500 up-regulated genes "
-  } else{
-    mp=mp[which(mp[,1]<0.05 & mp[,4]>=5),]
-    caption_title="Pathways for top 500 down-regulated genes "
-  }
-      
-  mp=mp[order(mp[,1]),]
-  mp=mp[,c(8,9,10,11,1:7,12)]
-
-  p <- DT::datatable(mp, extensions = 'Responsive', 
-                            caption=htmltools::tags$caption(paste0(caption_title, contras[1],"_vs_", contras[2]) ,
-                                                            style="color:gray; font-size: 18px" ),rownames=F)
- return(p)
-}
 ```
