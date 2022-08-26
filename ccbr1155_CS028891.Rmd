@@ -129,10 +129,6 @@ colors <- brewer.pal(6, "Set2")
 x=shorten_names(groups_df$group)
 x=as.factor(x)#set pheno data
 
-#merge into object
-set <- newSeqExpressionSet(as.matrix(filtered),
-                           phenoData = data.frame(x, row.names=colnames(filtered)))
-
 #Plot results
 par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
 plotRLE(as.matrix(filtered), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
@@ -143,6 +139,9 @@ mtext("Fig. Before Normalization", side=2, outer=TRUE, adj=0)
 Upper quantile normalization was attempted. This provided some correction, however, variance is still not near 0 in some samples.
 
 ```{r upper, echo=FALSE}
+#merge into object
+set <- newSeqExpressionSet(as.matrix(filtered),
+                           phenoData = data.frame(x, row.names=colnames(filtered)))
 set_u <- betweenLaneNormalization(set, which="upper")
 par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
 plotRLE(set_u, outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)

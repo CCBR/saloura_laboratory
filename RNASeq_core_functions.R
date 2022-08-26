@@ -265,10 +265,6 @@ generate_heat_map<-function(df_in,show_names="ON"){
 # volcano plots
 ################################################################################
 generate_volcano_plots<-function(cntrl_in,treat_in,type_in){
-  cntrl_in=cntrl
-  treat_in=treatment
-  i = 1
-  
   # read in res from DEG merge
   contras=c(treat_in,cntrl_in)
   fpath=paste0(output_dir,"DESeq2_",contras[1],"-", contras[2],"_DEG_allgenes_res1.txt")
