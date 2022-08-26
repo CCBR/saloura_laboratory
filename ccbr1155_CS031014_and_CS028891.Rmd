@@ -1,0 +1,162 @@
+---
+title: "CS031014_and_CS028891"
+author: "Samantha Sevilla"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
+############################################################
+# project information
+############################################################
+#paths
+parent_dir="~/../../Volumes/ccbr1155/"
+input_car_dir = "~/../../Volumes/ccbr1155/CS031014/"
+contrast_subpath=paste0(input_car_dir,"/analysis_v3/results/peaks/contrasts/")
+output_car_dir=paste0(input_car_dir,"r_analysis_220823/")
+
+input_rna_dir= "~/../../Volumes/ccbr1155/CS028891/"
+output_rna_dir=paste0(input_rna_dir,"r_analysis_220822/")
+
+
+output_dir = "~/../../Volumes/ccbr1155/CS031014_CS028891_complete/r_analysis_220825/"
+dir.create(file.path(output_dir), showWarnings = FALSE)
+```
+
+```{r user_params}
+############################################################
+# set global variables 
+############################################################
+padj_cutoff = 0.05
+fdr_cutoff=0.05
+species = "Homo Sapiens"
+log2fc_cutoff = log(1.1,2)
+method="fragments" #AUC or fragments
+dedup_status="dedup"
+norm_type_cutandrun="norm.relaxed"
+scalesfbymean="Y"
+rawcountsprescaled="N"
+
+# group to ignore
+ignore_groups=c()
+```
+
+```{r, include=FALSE}
+extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
+
+gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
+
+if (species=="Homo Sapiens"){
+  genome="hg38"
+} else if (species=="Mus Musculus"){
+  genome="mm10"
+}
+```
+
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+# package list
+list.of.packages=c("DESeq2","dplyr")
+#,"edgeR","", "DT","reshape2","pander",
+ #                  "plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", 
+  #                "ChIPseeker", "stringr","RColorBrewer","HTSFilter",
+   #                "pheatmap","ggpubr","ggVennDiagram","sf","karyoploteR","tidyverse")
+  
+#install as needed
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) BiocManager::install(new.packages)
+
+# source functions
+setwd(paste0(parent_dir,"sam/github"))
+source('CAR_and_RNASeq_core_functions.R')
+
+# load packages
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+#negate
+`%ni%` <- Negate(`%in%`)
+```
+
+## Quality Control  {.tabset}
+
+### Question 1
+1) What is the genome-wide distribution pattern of H3K4me3 in HN-6 cells before and after siSMYD3 treatment (pie chart)?
+
+```{r q1, warning=FALSE, echo=FALSE}
+# run function
+contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
+main_piecharts_from_collapsed(contrast_id)
+```
+
+
+### Question 2
+2) Which genes correspond to differential H3K4me3 present on promoters or gene bodies that also correspond to RNA expression changes? Using this gene list, conduct GSEA analysis to assess pathways affected by SMYD3 KO.
+
+Several graphics were created for the first contrast:
+
+- First, Venn diagrams were created, showing the genes associated with the CUT&RUN experiment and the RNASeq experiment that were significantly expressed (pvalue and log2foldchange) in either experiment. 
+
+- Next, a chromosome map was generated, showing these same genes with annotations for genes up-regulated in both experiment's treatment groups, down-regulated in both experiment's treatment groups, up-regulated only in the CAR's treatment group, and down-regulated only in the CAR's treatment group. 
+
+- Finally, a data table of all relevant genes, and significance values,  information is shown for genes that are significantly expressed in both experiments. NOTE that the number of lines in this may be greater than the overlap shown. This is becuase the overlap represents unique genes, and in some cases several peaks were identified 
+```{r q2, warning=FALSE, echo=FALSE}
+# run functions
+contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
+contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+main_differential_overlap(contrast_id_car=contrast_id_car,
+                          contrast_id_rna=contrast_id_rna,
+                          type_in="all")
+```
+
+
+Next, the RNASeq data was filtered to only include genes, regardless of signficance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. Analysis was then performed as above, with signfiicant genes for each annotation type used to subset the data further. Venn diagrams, chromosome maps, and data tables were generated.
+```{r q2, warning=FALSE, echo=FALSE}
+# run functions
+contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
+contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+main_differential_overlap(contrast_id_car=contrast_id_car,
+                          contrast_id_rna=contrast_id_rna,
+                          type_in="Promoter")
+```
+
+### Question 3
+3A) Generate volcano plot for H3K4me3 peaks and mark cell cycle and invasion/metastasis related genes (attached excel sheet) on this volcano plot.
+
+Negative log2 fold change in these plots corresponds with a decrease in the treatment, and a positive log2 fold change corresponds with an increase in the treatment.
+
+```{r q3, warning=FALSE, echo=FALSE}
+contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
+generate_volcano_plots(contrast_id)
+```
+
+
+### Question 4
+4) What is the genome-wide distribution pattern of H4K20me3 in HN-6 cells before and after SMYD3 knockout (pie chart)?
+
+```{r q4, echo=FALSE, warning=FALSE}
+contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
+main_piecharts_from_collapsed(contrast_id)
+```
+
+### Question 5
+5) Which genes correspond to differential H4K20me3 present on promoters or gene bodies that also correspond to RNA expression changes? Using this gene list, conduct GSEA analysis to assess pathways affected by SMYD3 KO.
+
+```{r q5, echo=FALSE, warning=FALSE}
+# run functions
+contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
+
+```
+
+### Other
+```{r qo, echo=FALSE, warning=FALSE}
+# run functions
+gene_anno_list=c("Promoter","Exon","Distal","Intron")
+contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
+for (anno_type in gene_anno_list){
+  generate_piecharts_from_genelist(contrast_id,anno_type)
+}
+contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
+for (anno_type in gene_anno_list){
+  generate_piecharts_from_genelist(contrast_id,anno_type)
+}
+```
