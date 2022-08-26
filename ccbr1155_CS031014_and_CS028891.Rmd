@@ -98,7 +98,7 @@ Several graphics were created for the first contrast:
 - Next, a chromosome map was generated, showing these same genes with annotations for genes up-regulated in both experiment's treatment groups, down-regulated in both experiment's treatment groups, up-regulated only in the CAR's treatment group, and down-regulated only in the CAR's treatment group. 
 
 - Finally, a data table of all relevant genes, and significance values,  information is shown for genes that are significantly expressed in both experiments.
-```{r q2, warning=FALSE, echo=FALSE}
+```{r q2_all, warning=FALSE, echo=FALSE}
 # run functions
 contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
 contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
@@ -110,7 +110,7 @@ main_differential_overlap(contrast_id_car=contrast_id_car,
 
 Next, the RNASeq data was filtered to only include genes, regardless of significance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. Analysis was then performed as above, with significant genes for each annotation type used to subset the data further. Venn diagrams, chromosome maps, and data tables were generated.
 #### Promoter
-```{r q2, warning=FALSE, echo=FALSE}
+```{r q2_p, warning=FALSE, echo=FALSE}
 # run functions
 contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
 contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
@@ -120,7 +120,7 @@ main_differential_overlap(contrast_id_car=contrast_id_car,
 ```
 
 #### Intron
-```{r q2, warning=FALSE, echo=FALSE}
+```{r q2_i, warning=FALSE, echo=FALSE}
 # run functions
 contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
 contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
