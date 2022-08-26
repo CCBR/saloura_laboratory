@@ -49,6 +49,7 @@ gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
 
 if (species=="Homo Sapiens"){
   genome="hg38"
+  txdb="TxDb.Hsapiens.UCSC.hg19.knownGene"
 } else if (species=="Mus Musculus"){
   genome="mm10"
 }
@@ -56,11 +57,9 @@ if (species=="Homo Sapiens"){
 
 ```{r echo=FALSE, warning=FALSE, include=FALSE}
 # package list
-list.of.packages=c("DESeq2","dplyr")
-#,"edgeR","", "DT","reshape2","pander",
- #                  "plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", 
-  #                "ChIPseeker", "stringr","RColorBrewer","HTSFilter",
-   #                "pheatmap","ggpubr","ggVennDiagram","sf","karyoploteR","tidyverse")
+list.of.packages=c("DESeq2","dplyr","ggplot2","ggrepel","ggpubr","tidyverse",
+                   "ggVennDiagram",txdb,"karyoploteR","RColorBrewer","EnhancedVolcano",
+                   "plotly")
   
 #install as needed
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
@@ -98,7 +97,7 @@ Several graphics were created for the first contrast:
 
 - Next, a chromosome map was generated, showing these same genes with annotations for genes up-regulated in both experiment's treatment groups, down-regulated in both experiment's treatment groups, up-regulated only in the CAR's treatment group, and down-regulated only in the CAR's treatment group. 
 
-- Finally, a data table of all relevant genes, and significance values,  information is shown for genes that are significantly expressed in both experiments. NOTE that the number of lines in this may be greater than the overlap shown. This is becuase the overlap represents unique genes, and in some cases several peaks were identified 
+- Finally, a data table of all relevant genes, and significance values,  information is shown for genes that are significantly expressed in both experiments.
 ```{r q2, warning=FALSE, echo=FALSE}
 # run functions
 contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
@@ -109,7 +108,8 @@ main_differential_overlap(contrast_id_car=contrast_id_car,
 ```
 
 
-Next, the RNASeq data was filtered to only include genes, regardless of signficance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. Analysis was then performed as above, with signfiicant genes for each annotation type used to subset the data further. Venn diagrams, chromosome maps, and data tables were generated.
+Next, the RNASeq data was filtered to only include genes, regardless of significance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. Analysis was then performed as above, with significant genes for each annotation type used to subset the data further. Venn diagrams, chromosome maps, and data tables were generated.
+#### Promoter
 ```{r q2, warning=FALSE, echo=FALSE}
 # run functions
 contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
@@ -117,6 +117,16 @@ contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
 main_differential_overlap(contrast_id_car=contrast_id_car,
                           contrast_id_rna=contrast_id_rna,
                           type_in="Promoter")
+```
+
+#### Intron
+```{r q2, warning=FALSE, echo=FALSE}
+# run functions
+contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
+contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+main_differential_overlap(contrast_id_car=contrast_id_car,
+                          contrast_id_rna=contrast_id_rna,
+                          type_in="Intron")
 ```
 
 ### Question 3

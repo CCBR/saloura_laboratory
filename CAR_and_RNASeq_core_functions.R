@@ -23,7 +23,7 @@ plot_pies_collapsed<-function(sub_in,df_in,y_in,percent_in,plot_in,title_in){
 # main function
 main_piecharts_from_collapsed<-function(sample_id){
   # bring in df
-  fpath=paste0(output_dir,"collapsed_df.csv")
+  fpath=paste0(output_car_dir,"collapsed_df.csv")
   collapsed_df=read.csv(fpath,sep=",")
   
   # subset for sample
@@ -94,10 +94,10 @@ plot_pies_genelist<-function(df_in,y_in,percent_in,fill_in,title_in){
 generate_piecharts_from_genelist<-function(sample_id,type_in="Promoter"){
   #sample_id=contrast_id
   # bring in dfs
-  fpath=paste0(output_dir,"collapsed_df.csv")
+  fpath=paste0(output_car_dir,"collapsed_df.csv")
   collapsed_df=read.csv(fpath,sep=",")
   
-  fpath=paste0(output_dir,"collapsed_pi_df.csv")
+  fpath=paste0(output_car_dir,"collapsed_pi_df.csv")
   collapsed_pi_df=read.csv(fpath,sep=",")
   
   # subset for sample
@@ -174,12 +174,12 @@ generate_piecharts_from_genelist<-function(sample_id,type_in="Promoter"){
 generate_volcano_plots<-function(contrast_id){
   
   # read in res from DEG merge
-  fpath=paste0(output_dir,"DESeq2_res_",contrast_id,".csv")
+  fpath=paste0(output_car_dir,"DESeq2_res_",contrast_id,".csv")
   res1=read.csv(fpath,sep=",")
   colnames(res1)=c("peakID","baseMean","log2FoldChange","lfcSE","stat","pvalue","padj")
   
   # read in PEAK ANNO df from DEG merge
-  fpath=paste0(output_dir,"peak_annotation_",contrast_id,".csv")
+  fpath=paste0(output_car_dir,"peak_annotation_",contrast_id,".csv")
   pa=read.csv(fpath)
 
   # merge annotations and peaks
@@ -298,15 +298,13 @@ create_venn_diagrams<-function(subtitle,rna_df_in,car_df_in){
   pf = p + ggtitle(full_title)
   
   # save and print
-  fpath=paste0(output_dir,"venndiagram_",subtitle,"_genes.png")
+  fpath=paste0(output_car_dir,"venndiagram_",subtitle,"_genes.png")
   ggsave(fpath,pf)
   
   print(pf)
 }
 
 create_overlapping_df<-function(rna_df_in,car_df_in){
-  rna_df_in=rna_df_filt2
-  car_df_in=car_df_filt2
   # separate ensembl for merging
   rna_df_in=tidyr::separate(rna_df_in,ENSEMBL,c("ENSEMBL","ID"),sep="[.]")
   
@@ -342,6 +340,15 @@ create_overlapping_df<-function(rna_df_in,car_df_in){
   merged_rna_df=full_join(overlap_genes_df,only_rna_df) %>%
     rename(c("log2FC_rna"=log2FoldChange,"padj_rna"=padj))
   
+  # fix ensemblID issue before merging to avoid duplicates
+  for (rowid in rownames(merged_car_df)){
+    if (is.na(merged_car_df[rowid,"ENSEMBL"])){
+      lookup_SYMBOL=merged_car_df[rowid,"SYMBOL"]
+      found_row=subset(merged_rna_df,SYMBOL==lookup_SYMBOL)
+      if (nrow(found_row)>0){merged_car_df[rowid,"ENSEMBL"]=found_row$ENSEMBL[[1]]}
+    }
+  }
+  
   # create final merged df
   merged_df=full_join(merged_car_df,merged_rna_df)
   merged_df=merged_df[,c("overlap_type","peakID","annotation","ENSEMBL","SYMBOL",
@@ -351,24 +358,24 @@ create_overlapping_df<-function(rna_df_in,car_df_in){
 }
 
 create_overlap_chrommap<-function(df_in,type_in){
-  df_in=merged_df
   #http://bioconductor.org/packages/release/bioc/vignettes/karyoploteR/inst/doc/karyoploteR.html
   # subset and remove NA's
   sub_df=df_in
-  sub_df=sub_df%>%tidyr::separate(peakID,c("chrm","peakID"),sep=":")
-  sub_df=subset(sub_df,chrm %in% paste0("chr",c(1:22)))
+  sub_df=sub_df%>%tidyr::separate(peakID,c("seqnames","peakID"),sep=":")
+  sub_df=subset(sub_df,seqnames %in% paste0("chr",c(1:22)))
+  sub_df=sub_df%>% rename(c("Start"=geneStart,"End"=geneEnd))
   
   # create lists of up and down regulated
-  both_up_df=subset(sub_df,log2FC_rna>log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("chrm","geneStart","geneEnd")]
-  both_down_df=subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car<log2fc_cutoff)[,c("chrm","geneStart","geneEnd")]
-  car_up_df=subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("chrm","geneStart","geneEnd")]
-  car_down_df=subset(sub_df,log2FC_rna>log2fc_cutoff & log2FC_car<log2fc_cutoff)[,c("chrm","geneStart","geneEnd")]
+  both_up_df=subset(sub_df,log2FC_rna>log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("seqnames","Start","End")]
+  both_down_df=subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car<log2fc_cutoff)[,c("seqnames","Start","End")]
+  car_up_df=subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("seqnames","Start","End")]
+  car_down_df=subset(sub_df,log2FC_rna>log2fc_cutoff & log2FC_car<log2fc_cutoff)[,c("seqnames","Start","End")]
   
   # plot
-  both_up_list = toGRanges(both_up_df)
-  both_down_list = toGRanges(both_down_df)
-  car_up_list = toGRanges(car_up_df)
-  car_down_list = toGRanges(car_down_df)
+  both_up_list = GRanges(both_up_df)
+  both_down_list = GRanges(both_down_df)
+  car_up_list = GRanges(car_up_df)
+  car_down_list = GRanges(car_down_df)
   
   # plot karyotype
   par(mfrow = c(1,1))
@@ -410,6 +417,9 @@ main_differential_overlap<-function(contrast_id_car,contrast_id_rna,type_in,anno
   #merge peak and annotation
   car_df=full_join(peak_df,deseq_df,by="peakID")
 
+  # remove any row without a gene symbol
+  car_df=car_df[complete.cases(car_df$SYMBOL),]
+  
   # rna db
   fpath=paste0(output_rna_dir,"DESeq2_",contrast_id_rna,"_DEG_allgenes_res1.txt")
   rna_df=read.csv(fpath,sep="\t")
