@@ -26,6 +26,7 @@ hs_err_pid*
 # R files
 ._*Rmd
 *html
+.Rhistory
 
 # other files
 *._*
