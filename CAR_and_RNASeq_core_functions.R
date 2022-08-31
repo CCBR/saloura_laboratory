@@ -65,7 +65,7 @@ main_piecharts_from_collapsed<-function(sample_id){
   print(p3)
   
   #create formatted table
-  out_df=collapsed_df[,c("sample","shortAnno","dedup","type","method","n","up","down","total")]
+  out_df=sub_df[,c("sample","shortAnno","dedup","type","method","n","up","down","total")]
   colnames(out_df)=c("sample_id","annotation","dedup_type","peak_type","norm_type",
                      "sig_peaks","sig_peaks_up","sig_peaks_down","total_peaks")
   DT::datatable(out_df)
@@ -91,7 +91,7 @@ plot_pies_genelist<-function(df_in,y_in,percent_in,fill_in,title_in){
 }
 
 # main function to generate pie charts
-generate_piecharts_from_genelist<-function(sample_id,type_in="Promoter"){
+generate_piecharts_from_genelist<-function(sample_id,subset_type="Promoter"){
   #sample_id=contrast_id
   # bring in dfs
   fpath=paste0(output_car_dir,"collapsed_df.csv")
@@ -105,13 +105,13 @@ generate_piecharts_from_genelist<-function(sample_id,type_in="Promoter"){
   sub_pi_df=subset(collapsed_pi_df,sample==sample_id)
   
   # calculate counts
-  REPRESSORS=nrow(subset(sub_pi_df,gene_list=="REPRESSORS" & shortAnno==type_in))
+  REPRESSORS=nrow(subset(sub_pi_df,gene_list=="REPRESSORS" & shortAnno==subset_type))
   REPRESSORS_total=nrow(subset(gene_list,Set=="REPRESSORS"))
   REPRESSORS_perc=round((REPRESSORS/REPRESSORS_total)*100,2)
-  ACCELERATORS=nrow(subset(sub_pi_df,gene_list=="ACCELERATORS"& shortAnno==type_in))
+  ACCELERATORS=nrow(subset(sub_pi_df,gene_list=="ACCELERATORS"& shortAnno==subset_type))
   ACCELERATORS_total=nrow(subset(gene_list,Set=="ACCELERATORS"))
   ACCELERATORS_perc=round((ACCELERATORS/ACCELERATORS_total)*100,2)
-  INVASION=nrow(subset(sub_pi_df,gene_list=="INVASION"& shortAnno==type_in))
+  INVASION=nrow(subset(sub_pi_df,gene_list=="INVASION"& shortAnno==subset_type))
   INVASION_total=nrow(subset(gene_list,Set=="INVASION"))
   INVASION_perc=round((INVASION/INVASION_total)*100,2)
   total=unique(sub_col_df$total)
@@ -163,7 +163,7 @@ generate_piecharts_from_genelist<-function(sample_id,type_in="Promoter"){
   p_final=ggarrange(p1,p2,p3,p4,
                     labels = c("A","B","C","D"),
                     ncol = 2, nrow = 2)
-  plot_title=paste0("Significant Peaks by Gene Lists in ",type_in,":\n",unique(sub_col_df$sample))
+  plot_title=paste0("Significant Peaks by Gene Lists in ",subset_type,":\n",unique(sub_col_df$sample))
   p_final=annotate_figure(p_final, top = text_grob(plot_title, face = "bold", size = 14))
   print(p_final)
 }
@@ -253,11 +253,11 @@ generate_volcano_plots<-function(contrast_id){
   # set labels
   log_pval=-log10(results_df$pvalue)
   y_title="-Log10 FDR"
-  type_in="pvalue"
+  stat_type="pvalue"
   log_FC=results_df$log2FoldChange
   Significant=rep("1_NotSignificant",length(log_FC))
-  Significant[which(results_df$pvalue<padj_cutoff & abs(results_df$log2FoldChange)>=log2fc_cutoff)]=paste0("3_LogFC_and_",type_in)
-  Significant[which(results_df$pvalue<padj_cutoff & abs(results_df$log2FoldChange)<log2fc_cutoff)]=paste0("2b_",type_in,"_Only")
+  Significant[which(results_df$pvalue<padj_cutoff & abs(results_df$log2FoldChange)>=log2fc_cutoff)]=paste0("3_LogFC_and_",stat_type)
+  Significant[which(results_df$pvalue<padj_cutoff & abs(results_df$log2FoldChange)<log2fc_cutoff)]=paste0("2b_",stat_type,"_Only")
   Significant[which(results_df$pvalue>=padj_cutoff & abs(results_df$log2FoldChange)>=log2fc_cutoff)]="2a_LogFC_Only"
   gene=results_df$SYMBOL
   volcano_data=as.data.frame(cbind(gene,log_FC,log_pval,Significant))
@@ -304,9 +304,7 @@ create_venn_diagrams<-function(subtitle,rna_df_in,car_df_in){
   print(pf)
 }
 
-create_overlapping_df<-function(rna_df_in,car_df_in){
-  # separate ensembl for merging
-  rna_df_in=tidyr::separate(rna_df_in,ENSEMBL,c("ENSEMBL","ID"),sep="[.]")
+create_overlapping_df<-function(rna_df_in,car_df_in,subset_type){
   
   # create gene lists
   list_of_rna_genes=rna_df_in$SYMBOL
@@ -354,40 +352,35 @@ create_overlapping_df<-function(rna_df_in,car_df_in){
   merged_df=merged_df[,c("overlap_type","peakID","annotation","ENSEMBL","SYMBOL",
                          "log2FC_car","padj_car","log2FC_rna","padj_rna",
                          "geneChr","geneStart","geneEnd","gene_description")]
+  fpath=paste0(output_dir,"overlap_",subset_type,"_",contrast_id_car,"_",contrast_id_rna,".csv")
+  write.table(merged_df,fpath,sep=",")
   return(merged_df)
 }
 
-create_overlap_chrommap<-function(df_in,type_in){
+create_overlap_chrommap<-function(merged_df,subset_type){
   #http://bioconductor.org/packages/release/bioc/vignettes/karyoploteR/inst/doc/karyoploteR.html
   # subset and remove NA's
-  sub_df=df_in
-  sub_df=sub_df%>%tidyr::separate(peakID,c("seqnames","peakID"),sep=":")
+  sub_df=merged_df%>%tidyr::separate(peakID,c("seqnames","peakID"),sep=":")
   sub_df=subset(sub_df,seqnames %in% paste0("chr",c(1:22)))
   sub_df=sub_df%>% rename(c("Start"=geneStart,"End"=geneEnd))
   
   # create lists of up and down regulated
   both_up_df=subset(sub_df,log2FC_rna>log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("seqnames","Start","End")]
   both_down_df=subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car<log2fc_cutoff)[,c("seqnames","Start","End")]
-  car_up_df=subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("seqnames","Start","End")]
+  car_up_df= subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("seqnames","Start","End")]
   car_down_df=subset(sub_df,log2FC_rna>log2fc_cutoff & log2FC_car<log2fc_cutoff)[,c("seqnames","Start","End")]
   
   # plot
-  both_up_list = GRanges(both_up_df)
-  both_down_list = GRanges(both_down_df)
-  car_up_list = GRanges(car_up_df)
-  car_down_list = GRanges(car_down_df)
-  
-  # plot karyotype
   par(mfrow = c(1,1))
   kp=plotKaryotype(genome=genome)
-  kpPlotRegions(kp, both_up_list, col="#FFBE33")
-  kpPlotRegions(kp, both_down_list, col="#5BFF33")
-  kpPlotRegions(kp, car_up_list, col="#337DFF")
-  kpPlotRegions(kp, car_down_list, col="#FFAACC")
+  if (nrow(both_up_df)>0){ kpPlotRegions(kp, GRanges(both_up_df), col="#FFBE33")}
+  if (nrow(both_down_df)>0){ kpPlotRegions(kp, GRanges(both_down_df), col="#5BFF33")}
+  if (nrow(car_up_df)>0){ kpPlotRegions(kp, GRanges(car_up_df), col="#337DFF")}
+  if (nrow(car_down_df)>0){ kpPlotRegions(kp, GRanges(car_down_df), col="#FFAACC")}
   legend(x="bottomright",
          legend=(c("Up_both","Down_both","Up_CAR_only","Down_CAR_only")),
-         fill = 2:4)
-  mtext(paste0("Karyoplot of ", type_in, " genes"),
+         fill = c("#FFBE33","#5BFF33","#337DFF","#FFAACC"))
+  mtext(paste0("Karyoplot of ", subset_type, " genes"),
         line=3)
 }
 
@@ -404,7 +397,7 @@ create_overlap_DT<-function(df_in){
   DT::datatable(df_in)
 }
 
-main_differential_overlap<-function(contrast_id_car,contrast_id_rna,type_in,anno_id="Promoter"){
+main_differential_overlap<-function(subset_type){
   #peak db
   fpath=paste0(output_car_dir,"peak_annotation_",contrast_id_car,".csv")
   peak_df=read.csv(fpath)
@@ -425,34 +418,197 @@ main_differential_overlap<-function(contrast_id_car,contrast_id_rna,type_in,anno
   rna_df=read.csv(fpath,sep="\t")
   rna_df=separate(rna_df,"X",c("ENSEMBL","SYMBOL"),sep="[|]")
 
-  # reduce df to sig only, limit cols
-  car_df_filt=subset(car_df,padj<padj_cutoff & 
-                       ( log2fc_cutoff>=log2fc_cutoff | log2fc_cutoff<=-log2fc_cutoff))
-  rna_df_filt=subset(rna_df,padj<padj_cutoff & 
-                       ( log2fc_cutoff>=log2fc_cutoff | log2fc_cutoff<=-log2fc_cutoff))
+  # separate ensembl for merging
+  rna_df=tidyr::separate(rna_df,ENSEMBL,c("ENSEMBL","ID"),sep="[.]")
   
-  if (type_in=="all"){
+  # save merged unfiltered
+  unfiltered_merge=full_join(rna_df %>% rename(c("log2FC_rna"=log2FoldChange,"padj_rna"=padj)),
+                             car_df %>% rename(c("log2FC_car"=log2FoldChange,"padj_car"=padj)))
+  fpath=paste0(output_dir,"unfilt_overlap_",subset_type,"_",contrast_id_car,"_",contrast_id_rna,".csv")
+  write.table(unfiltered_merge,fpath,sep=",")
+  
+  # reduce df to sig only, limit cols
+  car_df_filt=subset(car_df,(padj<padj_cutoff) & (abs(log2FoldChange)>=log2fc_cutoff))
+  rna_df_filt=subset(rna_df,padj<padj_cutoff & (abs(log2FoldChange)>=log2fc_cutoff))
+  
+  if (subset_type=="all"){
     # find overlaps and create venn diagrams and DT
-    create_venn_diagrams(type_in,rna_df_filt,car_df_filt)
-    merged_df=create_overlapping_df(rna_df_filt,car_df_filt)
-    create_overlap_chrommap(merged_df,type_in)
+    create_venn_diagrams(subset_type,rna_df_filt,car_df_filt)
+    merged_df=create_overlapping_df(rna_df_filt,car_df_filt,subset_type)
+    create_overlap_chrommap(merged_df,subset_type)
     create_overlap_DT(subset(merged_df,overlap_type=="overlap"))
   } else{
-    # find all genes that are defiinted as the shortAnno type
+    # find all genes that are defined as the shortAnno type
     # filter the RNA df for these genes
-    list_of_car_genes=subset(car_df,shortAnno==anno_id)$SYMBOL
+    list_of_car_genes=subset(car_df,shortAnno==subset_type)$SYMBOL
     rna_df_filt2=subset(rna_df_filt,SYMBOL %in% list_of_car_genes)
       
     # of these genes, which are in the CAR df
-    car_df_filt2=subset(car_df_filt,shortAnno==anno_id)
+    car_df_filt2=subset(car_df_filt,shortAnno==subset_type)
       
     # plot and DT
-    create_venn_diagrams(anno_id,rna_df_filt2,car_df_filt2)
-    merged_df=create_overlapping_df(rna_df_filt2,car_df_filt2)
-    create_overlap_chrommap(merged_df,anno_id)
+    create_venn_diagrams(subset_type,rna_df_filt2,car_df_filt2)
+    merged_df=create_overlapping_df(rna_df_filt2,car_df_filt2,subset_type)
+    create_overlap_chrommap(merged_df,subset_type)
     create_overlap_DT(subset(merged_df,overlap_type=="overlap"))
   }
 }
+
+############################################################
+# run GSEA
+############################################################
+# create ranked df
+prep_ranked_df<-function(subset_type,sig_type){
+  # input dfs
+  fpath=paste0(output_dir,"overlap_",subset_type,"_",contrast_id_car,"_",contrast_id_rna,".csv")
+  overlap_df=read.csv(fpath)
+  
+  fpath=paste0(output_rna_dir,"DESeq2_",contrast_id_rna,"_DEG_allgenes_res1.txt")
+  rna_df=read.csv(fpath,sep="\t")
+  rna_df=rna_df %>% 
+    separate("X",c("ENSEMBL","SYMBOL"),sep="[|]") %>% 
+    separate("ENSEMBL",c("ENSEMBL","ID"),sep="[.]")
+  
+  # subset CAR for annotation of interest
+  if (subset_type=="all"){
+    sub_df=overlap_df
+  } else{
+    sub_df=subset(overlap_df,annotation %in% subset_type)
+  }
+  
+  # sort and remove dups
+  dedup_df=subset(sub_df,overlap_type=="overlap")
+  if (sig_type=="both"){
+    sig_RNA=subset(overlap_df,abs(log2FC_rna)>log2fc_cutoff & padj_rna<padj_cutoff)$ENSEMBL
+    sig_CAR=subset(overlap_df,abs(log2FC_car)>log2fc_cutoff & padj_car<padj_cutoff)$ENSEMBL
+    dedup_df=subset(dedup_df,ENSEMBL %in% intersect(sig_RNA,sig_CAR))
+  }
+  dedup_df=dedup_df[order(dedup_df$padj_rna),]
+  dedup_df=dedup_df[!duplicated(dedup_df$ENSEMBL),]
+
+  # pull significant genes ENSEMBL
+  sorted_overlap_EID=dedup_df$ENSEMBL
+  
+  # remove all overlap EIDs and create list of RNA only
+  sub_rna_df=rna_df[order(rna_df$padj),]
+  sub_rna_df=sub_rna_df[!duplicated(sub_rna_df$ENSEMBL),]
+  sub_rna_df=subset(sub_rna_df,ENSEMBL %ni% sorted_overlap_EID)
+  sub_rna_df=sub_rna_df%>%rename("log2FC_rna"=log2FoldChange)
+  sorted_rna_EID=sub_rna_df[order(sub_rna_df$log2FC_rna),]$ENSEMBL
+  
+  # create final df
+  ranked_df=full_join(sub_rna_df,dedup_df) %>%
+    subset(ENSEMBL %in% c(sorted_overlap_EID,sorted_rna_EID))
+  rownames(ranked_df)=ranked_df$ENSEMBL
+  ranked_df=ranked_df[c(sorted_overlap_EID,sorted_rna_EID),]
+  
+  # print stats
+  print(paste0("There are ", length(sorted_overlap_EID),
+               " unique genes significant in both datasets. There are ", 
+               length(sorted_rna_EID), " other unique genes in the RNASeq dataset also used."))
+               
+
+  return(ranked_df)
+}
+
+# set the annotation dbs
+db_lookup<-function(t2g){
+  # generate gene lists for C1
+  # generate gene lists for C2 with subtypes biocarta, kegg, reactome, wiki
+  # generate gene lists for C5 with subtypes MF, BP, CC
+  # generate gene lists for Hallmark
+  if (t2g=="C1"){
+    db_out=msigdbr(species = species, category = "C1") %>% 
+      dplyr::select(gs_name,ensembl_gene)
+  } else if (t2g=="C2:BIOCARTA"){
+    db_out=msigdbr(species = species, category = "C2", subcategory = "BIOCARTA") %>% 
+      dplyr::select(gs_name,ensembl_gene)
+  } else if (t2g=="C2:KEGG"){
+    db_out=msigdbr(species = species, category = "C2", subcategory = "KEGG") %>% 
+      dplyr::select(gs_name,ensembl_gene)
+  } else if (t2g=="C2:REACTOME"){
+    db_out=msigdbr(species = species, category = "C2", subcategory = "REACTOME") %>%
+      dplyr::select(gs_name,ensembl_gene)
+  } else if (t2g=="C2:WIKIPATHWAYS"){
+    db_out=msigdbr(species = species, category = "C2", subcategory = "WIKIPATHWAYS") %>%
+      dplyr::select(gs_name,ensembl_gene)
+  } else if (t2g=="C5:MF"){
+    db_out=msigdbr(species = species,  category = "C5", subcategory = "GO:MF") %>%
+      dplyr::select(gs_name,ensembl_gene)
+  } else if (t2g=="C5:BP"){
+    db_out=msigdbr(species = species,  category = "C5", subcategory = "GO:BP") %>%
+      dplyr::select(gs_name,ensembl_gene)
+  } else if (t2g=="C5:CC"){
+    db_out=msigdbr(species = species,  category = "C5", subcategory = "GO:CC") %>%
+      dplyr::select(gs_name,ensembl_gene)
+  } else if (t2g=="H"){
+    db_out=msigdbr(species = species, category = "H") %>% 
+      dplyr::select(gs_name,ensembl_gene)  
+  } else{
+    print("DB does not exist. Please review")
+  }
+  
+  return(db_out)
+}
+
+# run fgsea
+run_fgsea<-function(t2g,ranked_df){
+  #https://cran.r-project.org/web/packages/msigdbr/vignettes/msigdbr-intro.html
+  #https://bioconductor.org/packages/release/bioc/vignettes/fgsea/inst/doc/fgsea-tutorial.html
+  
+  # pull db and generate list
+  anno_db=db_lookup(t2g)
+  msigdbr_list=split(anno_db$ensembl_gene,anno_db$gs_name)
+  
+  # create ranked input
+  ranked_list=ranked_df$log2FC_rna
+  names(ranked_list)=ranked_df$ENSEMBL  
+  
+  # run fgsea
+  fgseaRes <- fgsea(msigdbr_list, ranked_list,minSize  = minSize_gene_set)
+  
+  # run pathway analysis
+  topPathwaysUp <- fgseaRes[ES > 0][head(order(pval), n=5), pathway]
+  topPathwaysDown <- fgseaRes[ES < 0][head(order(pval), n=5), pathway]
+  topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+  
+  # generate plots, DT's for up and down
+  p1 = plotEnrichment(msigdbr_list[[topPathwaysUp[1]]],
+                 ranked_list) + labs(title=paste0("Top Up-regulated (",t2g,")\n",topPathwaysUp[1]))
+  p2 = plotEnrichment(msigdbr_list[[topPathwaysDown[1]]],
+                 ranked_list) + labs(title=paste0("Top Down-regulated (",t2g,")\n",topPathwaysDown[1]))
+  pf = cowplot::plot_grid(p1,p2,nrow=2)
+  print(pf)
+  
+  sub_df=subset(ranked_df,ENSEMBL %in% msigdbr_list[[topPathwaysUp[1]]])
+  DT::datatable(sub_df,extensions = 'Responsive', 
+                caption=htmltools::tags$caption(t2g,"\nTop Up-regulated pathways"))
+  sub_df=subset(ranked_df,ENSEMBL %in% msigdbr_list[[topPathwaysDown[1]]])
+  DT::datatable(sub_df,extensions = 'Responsive', 
+                caption=htmltools::tags$caption("Top Down-regulated pathways"))
+  
+  # generate table for all
+  sub_df=as.data.frame(fgseaRes)
+  col_select=c("padj","ES","NES","log2err")
+  for (colid in col_select){
+    sub_df[,colid]=signif(sub_df[,colid], digits=3)
+  }
+  col_select=c("pathway","size","padj","ES","NES","log2err")
+  DT::datatable(sub_df[,col_select],extensions = 'Responsive', 
+                caption=htmltools::tags$caption("Top pathways (",t2g,")"))
+}
+
+main_gsea_function<-function(subset_type,sig_type,db_list){
+  
+  # prep ranked gene list
+  ranked_df=prep_ranked_df(subset_type,sig_type)
+  
+  # run fgsea
+  for (db_id in db_list){
+    run_fgsea(db_id,ranked_df)
+  }
+}
+
 ############################################################
 # heatmaps for gene lists
 ############################################################
