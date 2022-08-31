@@ -27,7 +27,8 @@ hs_err_pid*
 ._*Rmd
 *html
 .Rhistory
-
+.RData
 # other files
 *._*
 *DS*
+.Rproj.user
