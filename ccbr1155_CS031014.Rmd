@@ -1,5 +1,5 @@
 ---
-title: "CCBR1155_CS031014"
+title: "CCBR1155 CS031014 CUT&RUN Analysis"
 author: "Samantha Sevilla"
 date: "8/23/2022"
 output: html_document
@@ -68,7 +68,7 @@ if (species=="Homo Sapiens"){
 ```
 
 ## **Data Processing**
-```{r contrast, include=FALSE}
+```{r contrast, include=FALSE,warning=FALSE, message=FALSE}
 ####################
 # run metadata input
 ####################
@@ -92,12 +92,12 @@ contrast_df=subset(contrast_df, (CNTRL %in% unique(groups_df$group)) | (TREATMEN
 ```
 
 The following samples are included in this analysis:
-```{r dt_samp, echo=FALSE}
+```{r dt_samp, echo=FALSE,warning=FALSE, message=FALSE}
 DT::datatable(groups_df)
 ```
 
 The following contrasts are included in this analysis:
-```{r dt_group, echo=FALSE}
+```{r dt_group, echo=FALSE,warning=FALSE, message=FALSE}
 DT::datatable(contrast_df)
 ```
 
@@ -109,14 +109,14 @@ Reviewing sample QC allows us to determine if there are outliers present in anal
 ## Quality Control  {.tabset}
 
 #### 53_H3K4me3_vs_HN6_H3K4me3
-```{r qc1, echo=FALSE, warning=FALSE}
+```{r qc1, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
 exclusion_list=c()
 contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
 main_prep_qc(contrast_id,exclusion_list)
 ```
 
 #### 53_H4K20m3_vs_HN6_H4K20me3
-```{r qc2, echo=FALSE, warning=FALSE}
+```{r qc2, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
 exclusion_list=c()
 contrast_id="53_H4K20m3_vs_HN6_H4K20me3"
 main_prep_qc(contrast_id,exclusion_list)
@@ -125,7 +125,7 @@ main_prep_qc(contrast_id,exclusion_list)
 ## **Data Processing**
 Reviewing counts of significant peaks guides analysis parameters downstream.
 
-```{r preprocess, echo=FALSE, warning=FALSE}
+```{r preprocess, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
 #read gene list
 gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
 

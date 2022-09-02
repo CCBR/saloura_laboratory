@@ -181,7 +181,7 @@ generate_volcano_plots<-function(contrast_id){
   # read in PEAK ANNO df from DEG merge
   fpath=paste0(output_car_dir,"peak_annotation_",contrast_id,".csv")
   pa=read.csv(fpath)
-
+  
   # merge annotations and peaks
   results_df = full_join(res1,pa,by=c("peakID"))
   
@@ -199,7 +199,7 @@ generate_volcano_plots<-function(contrast_id){
   names(keyvals)=rep("NS",times=length(keyvals))
   for ( i in seq(1,length(anno_types))) {
     keyvals[ abs(results_filtered_df$log2FoldChange) > log2fc_cutoff & 
-               results_filtered_df$padj < fdr_cutoff & results_filtered_df$shortAnno == anno_types[i] ] = colors[i]
+               results_filtered_df$padj < padj_cutoff & results_filtered_df$shortAnno == anno_types[i] ] = colors[i]
     names(keyvals)[keyvals == colors[i]] <- anno_types[i]
   }
   ## shapes
@@ -215,7 +215,7 @@ generate_volcano_plots<-function(contrast_id){
                       x = 'log2FoldChange',
                       y = 'padj',
                       ylab = bquote(~-Log[10] ~ FDR),
-                      pCutoff = fdr_cutoff,
+                      pCutoff = padj_cutoff,
                       FCcutoff = log2fc_cutoff,
                       labSize = 4,
                       title = contrast_id,
@@ -229,27 +229,6 @@ generate_volcano_plots<-function(contrast_id){
   )
   print(p)
   
-  p = EnhancedVolcano(results_filtered_df,
-                      lab = results_filtered_df$SYMBOL,
-                      x = 'log2FoldChange',
-                      y = 'padj',
-                      ylab = bquote(~-Log[10] ~ FDR),
-                      pCutoff = fdr_cutoff,
-                      FCcutoff = log2fc_cutoff,
-                      labSize = 4,
-                      title = contrast_id,
-                      subtitle = "",
-                      shapeCustom = keyvals.shape,
-                      subtitleLabSize = 1,
-                      captionLabSize = 10,
-                      colCustom = keyvals,
-                      colAlpha = 1,
-                      legendLabels = c("NS", expression(Log[2] ~ FC), "FDR", expression(FDR ~ and ~ log[2] ~ FC)),
-                      legendLabSize = 10,
-                      legendPosition = 'right'
-  )
-  print(p)
-
   # set labels
   log_pval=-log10(results_df$pvalue)
   y_title="-Log10 FDR"
@@ -409,7 +388,7 @@ main_differential_overlap<-function(subset_type){
   
   #merge peak and annotation
   car_df=full_join(peak_df,deseq_df,by="peakID")
-
+  
   # remove any row without a gene symbol
   car_df=car_df[complete.cases(car_df$SYMBOL),]
   
@@ -417,7 +396,7 @@ main_differential_overlap<-function(subset_type){
   fpath=paste0(output_rna_dir,"DESeq2_",contrast_id_rna,"_DEG_allgenes_res1.txt")
   rna_df=read.csv(fpath,sep="\t")
   rna_df=separate(rna_df,"X",c("ENSEMBL","SYMBOL"),sep="[|]")
-
+  
   # separate ensembl for merging
   rna_df=tidyr::separate(rna_df,ENSEMBL,c("ENSEMBL","ID"),sep="[.]")
   
@@ -442,10 +421,10 @@ main_differential_overlap<-function(subset_type){
     # filter the RNA df for these genes
     list_of_car_genes=subset(car_df,shortAnno==subset_type)$SYMBOL
     rna_df_filt2=subset(rna_df_filt,SYMBOL %in% list_of_car_genes)
-      
+    
     # of these genes, which are in the CAR df
     car_df_filt2=subset(car_df_filt,shortAnno==subset_type)
-      
+    
     # plot and DT
     create_venn_diagrams(subset_type,rna_df_filt2,car_df_filt2)
     merged_df=create_overlapping_df(rna_df_filt2,car_df_filt2,subset_type)
@@ -485,7 +464,7 @@ prep_ranked_df<-function(subset_type,sig_type){
   }
   dedup_df=dedup_df[order(dedup_df$padj_rna),]
   dedup_df=dedup_df[!duplicated(dedup_df$ENSEMBL),]
-
+  
   # pull significant genes ENSEMBL
   sorted_overlap_EID=dedup_df$ENSEMBL
   
@@ -502,12 +481,6 @@ prep_ranked_df<-function(subset_type,sig_type){
   rownames(ranked_df)=ranked_df$ENSEMBL
   ranked_df=ranked_df[c(sorted_overlap_EID,sorted_rna_EID),]
   
-  # print stats
-  print(paste0("There are ", length(sorted_overlap_EID),
-               " unique genes significant in both datasets. There are ", 
-               length(sorted_rna_EID), " other unique genes in the RNASeq dataset also used."))
-               
-
   return(ranked_df)
 }
 
@@ -551,62 +524,84 @@ db_lookup<-function(t2g){
   return(db_out)
 }
 
-# run fgsea
-run_fgsea<-function(t2g,ranked_df){
-  #https://cran.r-project.org/web/packages/msigdbr/vignettes/msigdbr-intro.html
-  #https://bioconductor.org/packages/release/bioc/vignettes/fgsea/inst/doc/fgsea-tutorial.html
-  
-  # pull db and generate list
-  anno_db=db_lookup(t2g)
-  msigdbr_list=split(anno_db$ensembl_gene,anno_db$gs_name)
-  
-  # create ranked input
-  ranked_list=ranked_df$log2FC_rna
-  names(ranked_list)=ranked_df$ENSEMBL  
-  
-  # run fgsea
-  fgseaRes <- fgsea(msigdbr_list, ranked_list,minSize  = minSize_gene_set)
-  
+# create top pathways
+create_plot_fgsea<-function(t2g,fgseaRes,ranked_list,msigdbr_list){
   # run pathway analysis
+  topPathwaysUp <- fgseaRes[ES > 0][head(order(pval), n=5), pathway]
+  topPathwaysDown <- fgseaRes[ES < 0][head(order(pval), n=5), pathway]
+  
+  # generate plots, DT's for up and down
+  path_name=str_wrap(gsub("_"," ",topPathwaysUp[1]), width = 30)
+  p1 = plotEnrichment(msigdbr_list[[topPathwaysUp[1]]], ranked_list) + 
+    labs(title=paste0("Up-regulated\n",path_name),cex=.5)
+  path_name=str_wrap(gsub("_"," ",topPathwaysDown[1]), width = 30)
+  p2 = plotEnrichment(msigdbr_list[[topPathwaysDown[1]]], ranked_list) + 
+    labs(title=paste0("Down-regulated\n",path_name))
+  title1=text_grob(paste0("Top pathways for ", t2g), size = 15, face = "bold")
+  grid.arrange(
+    p1,p2,
+    top=title1,
+    nrow=1
+  )
+}
+
+# create datatables
+create_dts_fgsea<-function(fgseaRes,db_id){
+  # subset pathways
   topPathwaysUp <- fgseaRes[ES > 0][head(order(pval), n=5), pathway]
   topPathwaysDown <- fgseaRes[ES < 0][head(order(pval), n=5), pathway]
   topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
   
-  # generate plots, DT's for up and down
-  p1 = plotEnrichment(msigdbr_list[[topPathwaysUp[1]]],
-                 ranked_list) + labs(title=paste0("Top Up-regulated (",t2g,")\n",topPathwaysUp[1]))
-  p2 = plotEnrichment(msigdbr_list[[topPathwaysDown[1]]],
-                 ranked_list) + labs(title=paste0("Top Down-regulated (",t2g,")\n",topPathwaysDown[1]))
-  pf = cowplot::plot_grid(p1,p2,nrow=2)
-  print(pf)
-  
-  sub_df=subset(ranked_df,ENSEMBL %in% msigdbr_list[[topPathwaysUp[1]]])
-  DT::datatable(sub_df,extensions = 'Responsive', 
-                caption=htmltools::tags$caption(t2g,"\nTop Up-regulated pathways"))
-  sub_df=subset(ranked_df,ENSEMBL %in% msigdbr_list[[topPathwaysDown[1]]])
-  DT::datatable(sub_df,extensions = 'Responsive', 
-                caption=htmltools::tags$caption("Top Down-regulated pathways"))
-  
   # generate table for all
   sub_df=as.data.frame(fgseaRes)
+  sub_df=subset(sub_df,pathway %in% topPathways)
+  sub_df=sub_df[order(sub_df$ES),]
   col_select=c("padj","ES","NES","log2err")
+  
   for (colid in col_select){
     sub_df[,colid]=signif(sub_df[,colid], digits=3)
   }
-  col_select=c("pathway","size","padj","ES","NES","log2err")
-  DT::datatable(sub_df[,col_select],extensions = 'Responsive', 
-                caption=htmltools::tags$caption("Top pathways (",t2g,")"))
+  sub_df$db=db_id
+  
+  col_select=c("db","pathway","size","padj","ES","NES","log2err")
+  return(sub_df[,col_select])
 }
 
+# run main GSEA function
 main_gsea_function<-function(subset_type,sig_type,db_list){
   
   # prep ranked gene list
   ranked_df=prep_ranked_df(subset_type,sig_type)
   
-  # run fgsea
+  # create annodb top pathway df
+  merged_df=data.frame()
+  # pull db and generate list
   for (db_id in db_list){
-    run_fgsea(db_id,ranked_df)
+    anno_db=db_lookup(db_id)
+    msigdbr_list=split(anno_db$ensembl_gene,anno_db$gs_name)
+    
+    # create ranked input
+    ranked_list=ranked_df$log2FC_rna
+    names(ranked_list)=ranked_df$ENSEMBL  
+    
+    # run fgsea
+    #https://cran.r-project.org/web/packages/msigdbr/vignettes/msigdbr-intro.html
+    #https://bioconductor.org/packages/release/bioc/vignettes/fgsea/inst/doc/fgsea-tutorial.html
+    fgseaRes <- fgsea(msigdbr_list, ranked_list,minSize  = minSize_gene_set)
+    
+    # plot 
+    create_plot_fgsea(db_id,fgseaRes,ranked_list,msigdbr_list)
+    
+    #create merged top pathway df
+    merged_df=rbind(merged_df,create_dts_fgsea(fgseaRes,db_id))
   }
+  
+  # print top pathway df
+  caption_title=paste0("Top pathways across all annotation databases for ", subset_type, " genes.")
+  DT::datatable(merged_df, extensions = 'Responsive', 
+                      caption=htmltools::tags$caption(paste0(caption_title),
+                                                      style="color:gray; font-size: 18px" ),
+                rownames=F)
 }
 
 ############################################################

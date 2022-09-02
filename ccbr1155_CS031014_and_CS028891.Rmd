@@ -1,5 +1,5 @@
 ---
-title: "CS031014_and_CS028891"
+title: "CCBR1155 CS031014_and_CS028891 Joint Analysis"
 author: "Samantha Sevilla"
 date: "`r Sys.Date()`"
 output: html_document
@@ -29,15 +29,11 @@ dir.create(file.path(output_dir), showWarnings = FALSE)
 # set global variables 
 ############################################################
 padj_cutoff = 0.05
-fdr_cutoff=0.05
 species = "Homo sapiens"
-log2fc_cutoff = log(1.1,2)
-method="fragments" #AUC or fragments
-dedup_status="dedup"
-norm_type_cutandrun="norm.relaxed"
-scalesfbymean="Y"
-rawcountsprescaled="N"
+fc_cutoff = log(1.5,2)
+log2fc_cutoff = 1.5
 minSize_gene_set=15
+
 #db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H")
 db_list=c("C2:BIOCARTA","C2:KEGG")
 
@@ -46,8 +42,6 @@ ignore_groups=c()
 ```
 
 ```{r, include=FALSE}
-extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
-
 gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
 
 if (species=="Homo sapiens"){
@@ -62,7 +56,7 @@ if (species=="Homo sapiens"){
 # package list
 list.of.packages=c("DESeq2","dplyr","ggplot2","ggrepel","ggpubr","tidyverse",
                    "ggVennDiagram",txdb,"karyoploteR","RColorBrewer","EnhancedVolcano",
-                   "plotly","fgsea","msigdbr")
+                   "plotly","fgsea","msigdbr","gridExtra","kableExtra")
   
 #install as needed
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
@@ -79,10 +73,10 @@ invisible(lapply(list.of.packages, library, character.only = TRUE))
 `%ni%` <- Negate(`%in%`)
 ```
 
-## Quality Control  {.tabset}
+## Questions  {.tabset}
 
 ### Question 1
-1) What is the genome-wide distribution pattern of H3K4me3 in HN-6 cells before and after siSMYD3 treatment (pie chart)?
+*1) What is the genome-wide distribution pattern of H3K4me3 in HN-6 cells before and after siSMYD3 treatment (pie chart)?*
 
 ```{r q1, warning=FALSE, echo=FALSE}
 # run function
@@ -90,67 +84,81 @@ contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
 main_piecharts_from_collapsed(contrast_id)
 ```
 
-### Question 2
-2) A) Which genes correspond to differential H3K4me3 present on promoters or gene bodies that also correspond to RNA expression changes? 
+### Question 2A
+*2A) Which genes correspond to differential H3K4me3 present on promoters or gene bodies that also correspond to RNA expression changes?*
 
-Several graphics and tables were created to answer A:
+Two gene lists were created. First, a gene list was created of the genes significant in either CUT&RUN (CAR) or the RNASeq experiment (pvalue and log2foldchange), referred to as "all genes". Second, the RNASeq data was filtered to only include genes, regardless of significance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. Then, a gene list was created of the genes significant in either CAR or RNASeq experiments, that fit the specified category (IE "Promoter"). Several graphics and tables were created to highlight these results:
 
-- First, a gene list was created of the genes signifcant in either CUT&RUN (CAR) or the RNASeq experiment (pvalue and log2foldchange). Then, Venn diagrams were created, showing the overlap and unique genes for each experiment.
+- First, Venn diagrams were created, showing the overlap and unique genes for each experiment.
 
 - Next, a chromosome map was generated, showing this same list with annotations for genes up-regulated in both experiment's treatment groups, down-regulated in both experiment's treatment groups, up-regulated only in the CAR's treatment group, and down-regulated only in the CAR's treatment group. 
 
-- Finally, a data table of all relevant genes, and significance values,  information is shown for genes that are significantly expressed in both experiments.
+- Next, a data table of all relevant genes, and significance values,  information is shown for genes that are significantly expressed in both experiments.
 
-B) Using this gene list, conduct GSEA analysis to assess pathways affected by SMYD3 KO.
-
-Several graphics and tables were created to answer B:
-
-- First, the gene list described above was subset for only signficant genes between the two experiments. This list was sorted
-based on the log2FoldChange of the RNASeq experiment. Then, all genes in the RNASeq experiment were added as comparative background, also sorted on log2FoldChange. GSEA analysis (using FGSEA in R) was performed with the databases listed. 
-
-- Next, a datatable of the top 5 up-regulated and top 5 down-regulated pathways was created.
-
-- Finally, enrichment plots were generated for the top up and down regulated pathways. Datatables of associated genes with each pathway were also created.
-
-```{r q2_all, warning=FALSE, echo=FALSE, message=FALSE}
-# run functions
+```{r q2a_settings, warning=FALSE, echo=FALSE, message=FALSE}
 contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
 contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+```
+
+#### All genes
+```{r q2a_all, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="all" #all, promoter, intron etc
 main_differential_overlap(subset_type=subset_type)
-main_gsea_function(subset_type=subset_type, 
-                   sig_type="either", #either or both
-                   db_list=db_list)
 ```
 
-Next, the RNASeq data was filtered to only include genes, regardless of significance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. Analysis was then performed as above, with significant genes for each annotation type used to subset the data further. Venn diagrams, chromosome maps, enrichment plots and accompanying data tables were generated.
-
-#### Promoter
-```{r q2_p, warning=FALSE, echo=FALSE, message=FALSE}
-# run functions
-contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
-contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+#### Promoter genes
+```{r q2a_p, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="Promoter"
 main_differential_overlap(subset_type=subset_type)
-main_gsea_function(subset_type=subset_type, #all, promoter, intron etc
-                   sig_type="either", #either or both
+```
+
+#### Intron genes
+```{r q2_i, warning=FALSE, echo=FALSE, message=FALSE}
+subset_type="Intron"
+main_differential_overlap(subset_type=subset_type)
+```
+
+### Question 2B
+*2B) Using this gene list, conduct GSEA analysis to assess pathways affected by SMYD3 KO.*
+
+Using the results from 2A, only the overlapping gene list was used for GSEA analysis. This list was sorted based on the log2FoldChange of the RNASeq experiment. Then, all genes in the RNASeq experiment were added as comparative background, also sorted on log2FoldChange. GSEA analysis (using FGSEA in R) was performed with the databases listed, creating several graphics and datatables.
+
+- First, enrichment plots were generated for the top up and down regulated pathways of each annotated database.
+
+- Next, a datatable of the top 5 up-regulated and top 5 down-regulated pathways per annotated database was created.
+
+```{r q2b_settings, warning=FALSE, echo=FALSE, message=FALSE}
+contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
+contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+sig_type="both" #whether to include all genes significant in either db or both dbs either or both
+```
+
+#### All genes
+```{r q2b_all, warning=FALSE, echo=FALSE, message=FALSE}
+subset_type="all" #all, promoter, intron etc
+main_gsea_function(subset_type=subset_type, 
+                   sig_type=sig_type, 
                    db_list=db_list)
 ```
 
-#### Intron
-```{r q2_i, warning=FALSE, echo=FALSE, message=FALSE}
-# run functions
-contrast_id_car="53_H3K4me3_vs_HN6_H3K4me3"
-contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+#### Promoter genes
+```{r q2b_p, warning=FALSE, echo=FALSE, message=FALSE}
+subset_type="Promoter"
+main_gsea_function(subset_type=subset_type, 
+                   sig_type=sig_type, 
+                   db_list=db_list)
+```
+
+#### Intron genes
+```{r q2b_i, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="Intron"
-main_differential_overlap(subset_type=subset_type)
-main_gsea_function(subset_type=subset_type, #all, promoter, intron etc
-                   sig_type="either", #either or both
+main_gsea_function(subset_type=subset_type, 
+                   sig_type=sig_type, 
                    db_list=db_list)
 ```
 
 ### Question 3
-3) Generate volcano plot for H3K4me3 peaks and mark cell cycle and invasion/metastasis related genes (attached excel sheet) on this volcano plot.
+*3) Generate volcano plot for H3K4me3 peaks and mark cell cycle and invasion/metastasis related genes (attached excel sheet) on this volcano plot.*
 
 Negative log2 fold change in these plots corresponds with a decrease in the treatment, and a positive log2 fold change corresponds with an increase in the treatment.
 
@@ -161,55 +169,94 @@ generate_volcano_plots(contrast_id)
 
 
 ### Question 4
-4) What is the genome-wide distribution pattern of H4K20me3 in HN-6 cells before and after SMYD3 knockout (pie chart)?
+*4) What is the genome-wide distribution pattern of H4K20me3 in HN-6 cells before and after SMYD3 knockout (pie chart)?*
 
 ```{r q4, echo=FALSE, warning=FALSE, message=FALSE}
 contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
 main_piecharts_from_collapsed(contrast_id)
 ```
 
-### Question 5
-5) Which genes correspond to differential H4K20me3 present on promoters or gene bodies that also correspond to RNA expression changes? Using this gene list, conduct GSEA analysis to assess pathways affected by SMYD3 KO.
+### Question 5A
+*5A) Which genes correspond to differential H4K20me3 present on promoters or gene bodies that also correspond to RNA expression changes?*
 
-```{r q5, warning=FALSE, echo=FALSE, message=FALSE}
+Two gene lists were created. First, a gene list was created of the genes significant in either CUT&RUN (CAR) or the RNASeq experiment (pvalue and log2foldchange), referred to as "all genes". Second, the RNASeq data was filtered to only include genes, regardless of significance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. Then, a gene list was created of the genes significant in either CAR or RNASeq experiments, that fit the specified category (IE "Promoter"). Several graphics and tables were created to highlight these results:
+
+- First, Venn diagrams were created, showing the overlap and unique genes for each experiment.
+
+- Next, a chromosome map was generated, showing this same list with annotations for genes up-regulated in both experiment's treatment groups, down-regulated in both experiment's treatment groups, up-regulated only in the CAR's treatment group, and down-regulated only in the CAR's treatment group. 
+
+- Next, a data table of all relevant genes, and significance values,  information is shown for genes that are significantly expressed in both experiments.
+
+```{r q5a_settings, warning=FALSE, echo=FALSE, message=FALSE}
 # run functions
-contrast_id_car=c("53_H4K20m3_vs_HN6_H4K20me3")
+contrast_id_car="53_H4K20m3_vs_HN6_H4K20me3"
 contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+```
+
+#### All genes
+```{r q5a_all, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="all" #all, promoter, intron etc
 main_differential_overlap(subset_type=subset_type)
-main_gsea_function(subset_type=subset_type, 
-                   sig_type="either", #either or both
-                   db_list=db_list)
 ```
 
-
-Next, the RNASeq data was filtered to only include genes, regardless of significance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. Analysis was then performed as above, with significant genes for each annotation type used to subset the data further. Venn diagrams, chromosome maps, and data tables were generated.
-#### Promoter
-```{r q5_p, warning=FALSE, echo=FALSE, message=FALSE}
-# run functions
-contrast_id_car=c("53_H4K20m3_vs_HN6_H4K20me3")
-contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+#### Promoter genes
+```{r q5a_p, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="Promoter"
 main_differential_overlap(subset_type=subset_type)
-main_gsea_function(subset_type=subset_type, #all, promoter, intron etc
-                   sig_type="either", #either or both
+```
+
+#### Intron genes
+```{r q5_i, warning=FALSE, echo=FALSE, message=FALSE}
+subset_type="Intron"
+main_differential_overlap(subset_type=subset_type)
+```
+
+### Question 5B
+*5b) Using this gene list, conduct GSEA analysis to assess pathways affected by SMYD3 KO.*
+
+Using the results from 5A, only the overlapping gene list was used for GSEA analysis. This list was sorted based on the log2FoldChange of the RNASeq experiment. Then, all genes in the RNASeq experiment were added as comparative background, also sorted on log2FoldChange. GSEA analysis (using FGSEA in R) was performed with the databases listed, creating several graphics and datatables.
+
+- First, enrichment plots were generated for the top up and down regulated pathways of each annotated database.
+
+- Next, a datatable of the top 5 up-regulated and top 5 down-regulated pathways per annotated database was created.
+
+```{r q5b_settings, warning=FALSE, echo=FALSE, message=FALSE}
+contrast_id_car="53_H4K20m3_vs_HN6_H4K20me3"
+contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+sig_type="both" #whether to include all genes significant in either db or both dbs either or both
+```
+
+#### All genes
+```{r q5b_all, warning=FALSE, echo=FALSE, message=FALSE}
+subset_type="all" #all, promoter, intron etc
+main_gsea_function(subset_type=subset_type, 
+                   sig_type=sig_type, 
                    db_list=db_list)
 ```
 
-#### Intron
-```{r q5_i, warning=FALSE, echo=FALSE, message=FALSE}
-# run functions
-contrast_id_car=c("53_H4K20m3_vs_HN6_H4K20me3")
-contrast_id_rna="CRISPR_52_without_IFNb-parental_HN6_without_IFNb"
+#### Promoter genes
+```{r q5b_p, warning=FALSE, echo=FALSE, message=FALSE}
+subset_type="Promoter"
+main_gsea_function(subset_type=subset_type, 
+                   sig_type=sig_type, 
+                   db_list=db_list)
+```
+
+#### Intron genes
+```{r q5b_i, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="Intron"
-main_differential_overlap(subset_type=subset_type)
-main_gsea_function(subset_type=subset_type, #all, promoter, intron etc
-                   sig_type="either", #either or both
+main_gsea_function(subset_type=subset_type, 
+                   sig_type=sig_type, 
                    db_list=db_list)
 ```
 
 ### Question 6
-6) Generate volcano plot for H4K20me3 peaks and mark cell cycle and invasion/metastasis related genes (attached excel sheet) on this volcano plot
+*6) Generate volcano plot for H4K20me3 peaks and mark cell cycle and invasion/metastasis related genes (attached excel sheet) on this volcano plot*
+
+```{r q6, warning=FALSE, echo=FALSE, message=FALSE}
+contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
+generate_volcano_plots(contrast_id)
+```
 
 ### Question 7
 7) Do we observe enrichment of H3K4me3, H4K20me3 in the promoters/gene body regions of cell cycle and/or invasion/metastasis genes (please use above datasets for interrogation) and how is this affected with SMYD3 knockdown?
@@ -225,11 +272,11 @@ main_gsea_function(subset_type=subset_type, #all, promoter, intron etc
 # run functions
 gene_anno_list=c("Promoter","Exon","Distal","Intron")
 contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
-for (anno_type in gene_anno_list){
-  generate_piecharts_from_genelist(contrast_id,anno_type)
-}
-contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
-for (anno_type in gene_anno_list){
-  generate_piecharts_from_genelist(contrast_id,anno_type)
-}
+#for (anno_type in gene_anno_list){
+#  generate_piecharts_from_genelist(contrast_id,anno_type)
+#}
+#contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
+#for (anno_type in gene_anno_list){
+#  generate_piecharts_from_genelist(contrast_id,anno_type)
+#}
 ```
