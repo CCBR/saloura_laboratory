@@ -25,7 +25,7 @@ dir.create(file.path(output_dir), showWarnings = FALSE)
 ############################################################
 p_val_set = 0.05
 species = "Homo Sapiens"
-log2fc_cutoff=log(1.5,2)
+log2fc_cutoff=log2(1)
 method="fragments" #AUC or fragments
 dedup_status="dedup"
 norm_type_cutandrun="norm.relaxed"
@@ -43,7 +43,7 @@ extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
 
 ```{r echo=FALSE, warning=FALSE, include=FALSE}
 if (species=="Homo Sapiens"){
-  txdb="TxDb.Hsapiens.UCSC.hg19.knownGene"
+  txdb="TxDb.Hsapiens.UCSC.hg38.knownGene"
 }
 # package list
 list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb)
@@ -62,7 +62,7 @@ invisible(lapply(list.of.packages, library, character.only = TRUE))
 `%ni%` <- Negate(`%in%`)
 
 if (species=="Homo Sapiens"){
-  txdb<-TxDb.Hsapiens.UCSC.hg19.knownGene
+  txdb<-TxDb.Hsapiens.UCSC.hg38.knownGene
   annodb="org.Hs.eg.db"
 }
 ```

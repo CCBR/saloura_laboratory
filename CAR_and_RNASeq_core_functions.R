@@ -72,107 +72,9 @@ main_piecharts_from_collapsed<-function(sample_id){
 }
 
 ############################################################
-# pie charts for gene lists
-############################################################
-# create pie chart for significant peaks within PI gene list for promoters
-plot_pies_genelist<-function(df_in,y_in,percent_in,fill_in,title_in){
-  p = ggplot(df_in, aes(x = "" , y = get(y_in), fill = fct_inorder(get(fill_in)))) +
-    geom_col(width = 1, color = 1) +
-    coord_polar(theta = "y") +
-    scale_fill_brewer(palette = "Pastel1") +
-    geom_label_repel(data = df_in,
-                     aes(y = pos, label = paste0(get(percent_in), "%")),
-                     size = 4, nudge_x = 1, show.legend = FALSE) +
-    guides(fill = guide_legend(title = "Group")) +
-    ggtitle(title_in) +
-    theme_void()
-  
-  return(p)
-}
-
-# main function to generate pie charts
-generate_piecharts_from_genelist<-function(sample_id,subset_type="Promoter"){
-  #sample_id=contrast_id
-  # bring in dfs
-  fpath=paste0(output_car_dir,"collapsed_df.csv")
-  collapsed_df=read.csv(fpath,sep=",")
-  
-  fpath=paste0(output_car_dir,"collapsed_pi_df.csv")
-  collapsed_pi_df=read.csv(fpath,sep=",")
-  
-  # subset for sample
-  sub_col_df=subset(collapsed_df,sample==sample_id)
-  sub_pi_df=subset(collapsed_pi_df,sample==sample_id)
-  
-  # calculate counts
-  REPRESSORS=nrow(subset(sub_pi_df,gene_list=="REPRESSORS" & shortAnno==subset_type))
-  REPRESSORS_total=nrow(subset(gene_list,Set=="REPRESSORS"))
-  REPRESSORS_perc=round((REPRESSORS/REPRESSORS_total)*100,2)
-  ACCELERATORS=nrow(subset(sub_pi_df,gene_list=="ACCELERATORS"& shortAnno==subset_type))
-  ACCELERATORS_total=nrow(subset(gene_list,Set=="ACCELERATORS"))
-  ACCELERATORS_perc=round((ACCELERATORS/ACCELERATORS_total)*100,2)
-  INVASION=nrow(subset(sub_pi_df,gene_list=="INVASION"& shortAnno==subset_type))
-  INVASION_total=nrow(subset(gene_list,Set=="INVASION"))
-  INVASION_perc=round((INVASION/INVASION_total)*100,2)
-  total=unique(sub_col_df$total)
-  other=total-sum(REPRESSORS,ACCELERATORS,INVASION)
-  
-  # create df
-  tmp_df=data.frame("IDENTIFIED","REPRESSORS",REPRESSORS,round((REPRESSORS/total)*100,2),REPRESSORS_perc)
-  tmp_df=rbind(tmp_df,c("IDENTIFIED","ACCELERATORS",ACCELERATORS,round((ACCELERATORS/total)*100,2),ACCELERATORS_perc))
-  tmp_df=rbind(tmp_df,c("IDENTIFIED","INVASION",INVASION,round((INVASION/total)*100,2),INVASION_perc))
-  tmp_df=rbind(tmp_df,c("IDENTIFIED","OTHER",other,round((other/total)*100,2),0))
-  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","REPRESSORS",REPRESSORS_total-REPRESSORS,0,(100-REPRESSORS_perc)))
-  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","ACCELERATORS",ACCELERATORS_total-ACCELERATORS,0,100-ACCELERATORS_perc))
-  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","INVASION",INVASION_total-INVASION,0,100-INVASION_perc))
-  colnames(tmp_df)=c("Search","Category","n","perc","perc_list")
-  tmp_df$n=as.numeric(tmp_df$n)
-  
-  ## all totals
-  tmp_sub_df <- subset(tmp_df,Search=="IDENTIFIED") %>%
-    mutate(csum = rev(cumsum(rev(n))),
-           pos = n/2 + lead(csum, 1),
-           pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("All Genes (",sum(tmp_sub_df$n),")")
-  p1 = plot_pies_genelist(tmp_sub_df,"n","perc","Category",plot_title)
-  
-  ## ACCELERATORS
-  tmp_sub_df <- subset(tmp_df,Category=="ACCELERATORS") %>%
-    mutate(csum = rev(cumsum(rev(n))),
-           pos = n/2 + lead(csum, 1),
-           pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("    ACCELERATORS Genes (N=16)")
-  p2 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
-  
-  ## REPRESSORS
-  tmp_sub_df <- subset(tmp_df,Category=="REPRESSORS") %>%
-    mutate(csum = rev(cumsum(rev(n))), 
-           pos = n/2 + lead(csum, 1),
-           pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("    REPRESSORS Genes (N=10)")
-  p3 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
-  
-  ## INVASION
-  tmp_sub_df <- subset(tmp_df,Category=="INVASION") %>%
-    mutate(csum = rev(cumsum(rev(n))), 
-           pos = n/2 + lead(csum, 1),
-           pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("    INVASION Genes (N=16)")
-  p4 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
-  
-  p_final=ggarrange(p1,p2,p3,p4,
-                    labels = c("A","B","C","D"),
-                    ncol = 2, nrow = 2)
-  plot_title=paste0("Significant Peaks by Gene Lists in ",subset_type,":\n",unique(sub_col_df$sample))
-  p_final=annotate_figure(p_final, top = text_grob(plot_title, face = "bold", size = 14))
-  print(p_final)
-}
-
-############################################################
 # volcano plots for gene lists
 ############################################################
-generate_volcano_plots<-function(contrast_id){
-  
+generate_volcano_plots<-function(contrast_id,gene_list_in="",gene_title_in=""){
   # read in res from DEG merge
   fpath=paste0(output_car_dir,"DESeq2_res_",contrast_id,".csv")
   res1=read.csv(fpath,sep=",")
@@ -185,48 +87,53 @@ generate_volcano_plots<-function(contrast_id){
   # merge annotations and peaks
   results_df = full_join(res1,pa,by=c("peakID"))
   
-  # filter df
-  results_filtered_df = subset(results_df,(log2FoldChange>=log2fc_cutoff) | (log2FoldChange<=-log2fc_cutoff))
-  results_filtered_df = subset(results_filtered_df,padj<=padj_cutoff)
+  # calc log10
+  results_df$log_pval=-log10(results_df$pvalue)
+  
+  # if the gene list is used, subset df to only the master gene list
+  if (length(gene_list_in)>1){
+    results_df=subset(results_df,SYMBOL %in% gene_list_in)
+  }
   
   # add colors and annotate
   colors=brewer.pal(7,"Set1")
   anno_types=levels(as.factor(results_df$shortAnno))
   
-  # set keyvals
-  ## colors
-  keyvals=rep("grey",times=nrow(results_filtered_df))
+  # set all vals to NS and grey
+  keyvals=rep("grey",times=nrow(results_df))
   names(keyvals)=rep("NS",times=length(keyvals))
+  
+  #iterate through each annotation type; change color if
   for ( i in seq(1,length(anno_types))) {
-    keyvals[ abs(results_filtered_df$log2FoldChange) > log2fc_cutoff & 
-               results_filtered_df$padj < padj_cutoff & results_filtered_df$shortAnno == anno_types[i] ] = colors[i]
+    keyvals[ abs(results_df$log2FoldChange) > log2fc_cutoff_car & 
+               results_df$pvalue < padj_cutoff & 
+               results_df$shortAnno == anno_types[i]] = colors[i]
     names(keyvals)[keyvals == colors[i]] <- anno_types[i]
   }
+
   ## shapes
-  keyvals.shape <- ifelse(
-    results_filtered_df$SYMBOL %in% gene_list$Human, 17,3)
-  keyvals.shape[is.na(keyvals.shape)] <- 3
-  names(keyvals.shape)[keyvals.shape == 3] <- 'Not in gene list'
-  names(keyvals.shape)[keyvals.shape == 17] <- 'In gene list'
-  
+  #keyvals.shape <- ifelse(results_df$SYMBOL %in% gene_list_select, 17,3)
+  #keyvals.shape[is.na(keyvals.shape)] <- 3
+  #names(keyvals.shape)[keyvals.shape == 3] <- 'Not in gene list'
+  #names(keyvals.shape)[keyvals.shape == 17] <- 'In gene list'
+
   # print volcano without genelist designation
-  p = EnhancedVolcano(results_filtered_df,
-                      lab = results_filtered_df$SYMBOL,
+  p = EnhancedVolcano(results_df,
+                      lab = results_df$SYMBOL,
                       x = 'log2FoldChange',
-                      y = 'padj',
+                      y = 'pvalue',
                       ylab = bquote(~-Log[10] ~ FDR),
                       pCutoff = padj_cutoff,
-                      FCcutoff = log2fc_cutoff,
+                      FCcutoff = log2fc_cutoff_car,
                       labSize = 4,
-                      title = contrast_id,
+                      title = paste0(contrast_id,"\n", gene_title_in),
                       subtitle = "",
                       subtitleLabSize = 1,
                       captionLabSize = 10,
                       colCustom = keyvals,
                       colAlpha = 1,
                       legendLabels = c("NS", expression(Log[2] ~ FC), "FDR", expression(FDR ~ and ~ log[2] ~ FC)),
-                      legendLabSize = 10,legendPosition = 'right'
-  )
+                      legendLabSize = 10,legendPosition = 'right')
   print(p)
   
   # set labels
@@ -235,31 +142,34 @@ generate_volcano_plots<-function(contrast_id){
   stat_type="pvalue"
   log_FC=results_df$log2FoldChange
   Significant=rep("1_NotSignificant",length(log_FC))
-  Significant[which(results_df$pvalue<padj_cutoff & abs(results_df$log2FoldChange)>=log2fc_cutoff)]=paste0("3_LogFC_and_",stat_type)
-  Significant[which(results_df$pvalue<padj_cutoff & abs(results_df$log2FoldChange)<log2fc_cutoff)]=paste0("2b_",stat_type,"_Only")
-  Significant[which(results_df$pvalue>=padj_cutoff & abs(results_df$log2FoldChange)>=log2fc_cutoff)]="2a_LogFC_Only"
+  Significant[which(results_df$pvalue<=padj_cutoff & abs(results_df$log2FoldChange)>=log2fc_cutoff_car)]=paste0("3_LogFC_and_",stat_type)
+  Significant[which(results_df$pvalue<=padj_cutoff & abs(results_df$log2FoldChange)<=log2fc_cutoff_car)]=paste0("2b_",stat_type,"_Only")
+  Significant[which(results_df$pvalue>=padj_cutoff & abs(results_df$log2FoldChange)>=log2fc_cutoff_car)]="2a_LogFC_Only"
   gene=results_df$SYMBOL
   volcano_data=as.data.frame(cbind(gene,log_FC,log_pval,Significant))
   
-  p <- plot_ly(data = volcano_data, x = log_FC, y = log_pval, text = gene,
+  p <- plot_ly(data = volcano_data, 
+               x = log_FC, y = log_pval, 
+               text = gene,
                mode = "markers", 
-               color = Significant) %>% layout(title =paste0(contrast_id),
-                                               xaxis=list(title="Fold Change",
-                                                          range =c(-5,5),
-                                                          tickvals=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
-                                                          ticktext=c('-32','-16','-8','-4','-2',
-                                                                     '1','2','4','8','16','32')),
-                                               yaxis=list(title=y_title,range =c(0,15)))
+               color = Significant) %>% 
+    layout(title=paste0(contrast_id,"\n", gene_title_in),
+           xaxis=list(title="Fold Change",
+                      range =c(-5,5),
+                      tickvals=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
+                      ticktext=c('-32','-16','-8','-4','-2',
+                                 '1','2','4','8','16','32')),
+           yaxis=list(title=y_title,range =c(0,15)))
   return(p)
 }
 
 ############################################################
 # find differential overlap
 ############################################################
-create_venn_diagrams<-function(subtitle,rna_df_in,car_df_in){
+create_venn_diagrams<-function(subtitle,merged_df){
   # create gene lists
-  list_of_rna_genes=rna_df_in$SYMBOL
-  list_of_car_genes=car_df_in$SYMBOL
+  list_of_rna_genes=unique(subset(merged_df,overlap_type != "only_car")$SYMBOL)
+  list_of_car_genes=unique(subset(merged_df,overlap_type != "only_rna")$SYMBOL)
   
   # remove NA"s
   list_of_rna_genes=list_of_rna_genes[!is.na(list_of_rna_genes)]
@@ -293,61 +203,72 @@ create_overlapping_df<-function(rna_df_in,car_df_in,subset_type){
   list_of_rna_genes=list_of_rna_genes[!is.na(list_of_rna_genes)]
   list_of_car_genes=list_of_car_genes[!is.na(list_of_car_genes)]
   
-  # create CAR only, overlapped df
-  car_col_list=c("peakID","geneChr","geneStart","geneEnd","shortAnno","ENSEMBL",
-                 "SYMBOL","GENENAME","log2FoldChange","padj")
-  overlap_genes_df=subset(car_df_in,SYMBOL%in%list_of_rna_genes)[,car_col_list]
-  overlap_genes_df$overlap_type="overlap"
-  
-  only_car_df=subset(car_df_in,SYMBOL%ni%list_of_rna_genes)[,car_col_list]
-  only_car_df$overlap_type="only_car"
-  
-  merged_car_df=full_join(overlap_genes_df,only_car_df) %>%
-    rename(c("log2FC_car"=log2FoldChange,"padj_car"=padj,
-             "gene_description"=GENENAME,"annotation"=shortAnno))
-  
-  # create RNA only, overlapped df
-  rna_col_list=c("ENSEMBL","SYMBOL","log2FoldChange","padj")
-  overlap_genes_df=subset(rna_df_in,SYMBOL%in%list_of_car_genes)[,rna_col_list]
-  overlap_genes_df$overlap_type="overlap"
-  
-  only_rna_df=subset(rna_df_in,SYMBOL%ni%list_of_car_genes)[,rna_col_list]
-  only_rna_df$overlap_type="only_rna"
-  
-  merged_rna_df=full_join(overlap_genes_df,only_rna_df) %>%
-    rename(c("log2FC_rna"=log2FoldChange,"padj_rna"=padj))
-  
-  # fix ensemblID issue before merging to avoid duplicates
-  for (rowid in rownames(merged_car_df)){
-    if (is.na(merged_car_df[rowid,"ENSEMBL"])){
-      lookup_SYMBOL=merged_car_df[rowid,"SYMBOL"]
-      found_row=subset(merged_rna_df,SYMBOL==lookup_SYMBOL)
-      if (nrow(found_row)>0){merged_car_df[rowid,"ENSEMBL"]=found_row$ENSEMBL[[1]]}
+  # check for overlap - if there is none return empty df
+  check_overlap=list_of_rna_genes[list_of_rna_genes %in% list_of_car_genes]
+  if (length(check_overlap)==0){
+    return(data.frame())
+  } else{
+    
+    # create CAR only, overlapped df
+    car_col_list=c("peakID","geneChr","geneStart","geneEnd","shortAnno","ENSEMBL",
+                   "SYMBOL","GENENAME","log2FoldChange","padj")
+    overlap_genes_df=subset(car_df_in,SYMBOL%in%list_of_rna_genes)[,car_col_list]
+    overlap_genes_df$overlap_type="overlap"
+    
+    only_car_df=subset(car_df_in,SYMBOL%ni%list_of_rna_genes)[,car_col_list]
+    only_car_df$overlap_type="only_car"
+    
+    merged_car_df=full_join(overlap_genes_df,only_car_df) %>%
+      rename(c("log2FC_car"=log2FoldChange,"padj_car"=padj,
+               "gene_description"=GENENAME,"annotation"=shortAnno))
+    
+    # create RNA only, overlapped df
+    rna_col_list=c("ENSEMBL","SYMBOL","log2FoldChange","padj")
+    overlap_genes_df=subset(rna_df_in,SYMBOL%in%list_of_car_genes)[,rna_col_list]
+    overlap_genes_df$overlap_type="overlap"
+    
+    only_rna_df=subset(rna_df_in,SYMBOL%ni%list_of_car_genes)[,rna_col_list]
+    only_rna_df$overlap_type="only_rna"
+    
+    merged_rna_df=full_join(overlap_genes_df,only_rna_df) %>%
+      rename(c("log2FC_rna"=log2FoldChange,"padj_rna"=padj))
+    
+    # fix ensemblID issue before merging to avoid duplicates
+    for (rowid in rownames(merged_car_df)){
+      if (is.na(merged_car_df[rowid,"ENSEMBL"])){
+        lookup_SYMBOL=merged_car_df[rowid,"SYMBOL"]
+        found_row=subset(merged_rna_df,SYMBOL==lookup_SYMBOL)
+        if (nrow(found_row)>0){merged_car_df[rowid,"ENSEMBL"]=found_row$ENSEMBL[[1]]}
+      }
     }
+    
+    # create final merged df
+    merged_df=full_join(merged_car_df,merged_rna_df)
+    merged_df=merged_df[,c("overlap_type","peakID","annotation","ENSEMBL","SYMBOL",
+                           "log2FC_car","padj_car","log2FC_rna","padj_rna",
+                           "geneChr","geneStart","geneEnd","gene_description")]
+    fpath=paste0(output_dir,"overlap_",subset_type,"_",contrast_id_car,"_",contrast_id_rna,".csv")
+    write.table(merged_df,fpath,sep=",")
+    return(merged_df)
   }
-  
-  # create final merged df
-  merged_df=full_join(merged_car_df,merged_rna_df)
-  merged_df=merged_df[,c("overlap_type","peakID","annotation","ENSEMBL","SYMBOL",
-                         "log2FC_car","padj_car","log2FC_rna","padj_rna",
-                         "geneChr","geneStart","geneEnd","gene_description")]
-  fpath=paste0(output_dir,"overlap_",subset_type,"_",contrast_id_car,"_",contrast_id_rna,".csv")
-  write.table(merged_df,fpath,sep=",")
-  return(merged_df)
 }
 
 create_overlap_chrommap<-function(merged_df,subset_type){
   #http://bioconductor.org/packages/release/bioc/vignettes/karyoploteR/inst/doc/karyoploteR.html
   # subset and remove NA's
   sub_df=merged_df%>%tidyr::separate(peakID,c("seqnames","peakID"),sep=":")
-  sub_df=subset(sub_df,seqnames %in% paste0("chr",c(1:22)))
+  sub_df=subset(sub_df,seqnames %in% paste0("chr",c(1:22,"X","Y")))
   sub_df=sub_df%>% rename(c("Start"=geneStart,"End"=geneEnd))
   
   # create lists of up and down regulated
-  both_up_df=subset(sub_df,log2FC_rna>log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("seqnames","Start","End")]
-  both_down_df=subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car<log2fc_cutoff)[,c("seqnames","Start","End")]
-  car_up_df= subset(sub_df,log2FC_rna<log2fc_cutoff & log2FC_car>log2fc_cutoff)[,c("seqnames","Start","End")]
-  car_down_df=subset(sub_df,log2FC_rna>log2fc_cutoff & log2FC_car<log2fc_cutoff)[,c("seqnames","Start","End")]
+  both_up_df=subset(sub_df,log2FC_rna>log2fc_cutoff_rna & log2FC_car>log2fc_cutoff_car)[,c("seqnames","Start","End")]
+  both_down_df=subset(sub_df,log2FC_rna<log2fc_cutoff_rna & log2FC_car<log2fc_cutoff_car)[,c("seqnames","Start","End")]
+  car_up_df= subset(sub_df,log2FC_rna<log2fc_cutoff_rna & log2FC_car>log2fc_cutoff_car)[,c("seqnames","Start","End")]
+  car_down_df=subset(sub_df,log2FC_rna>log2fc_cutoff_rna & log2FC_car<log2fc_cutoff_car)[,c("seqnames","Start","End")]
+  
+  # total sig genes
+  total_peaks=nrow(both_up_df) + nrow(both_down_df) + nrow(car_up_df) + nrow(car_down_df)
+  total_genes=length(unique(subset(merged_df,overlap_type=="overlap")$SYMBOL))
   
   # plot
   par(mfrow = c(1,1))
@@ -359,7 +280,8 @@ create_overlap_chrommap<-function(merged_df,subset_type){
   legend(x="bottomright",
          legend=(c("Up_both","Down_both","Up_CAR_only","Down_CAR_only")),
          fill = c("#FFBE33","#5BFF33","#337DFF","#FFAACC"))
-  mtext(paste0("Karyoplot of ", subset_type, " genes"),
+  mtext(paste0("Karyoplot: ", subset_type, " sig genes (", total_genes,
+               ") and peaks (", total_peaks,")."),
         line=3)
 }
 
@@ -407,15 +329,13 @@ main_differential_overlap<-function(subset_type){
   write.table(unfiltered_merge,fpath,sep=",")
   
   # reduce df to sig only, limit cols
-  car_df_filt=subset(car_df,(padj<padj_cutoff) & (abs(log2FoldChange)>=log2fc_cutoff))
-  rna_df_filt=subset(rna_df,padj<padj_cutoff & (abs(log2FoldChange)>=log2fc_cutoff))
+  car_df_filt=subset(car_df,(padj<padj_cutoff) & (abs(log2FoldChange)>=log2fc_cutoff_car))
+  rna_df_filt=subset(rna_df,padj<padj_cutoff & (abs(log2FoldChange)>=log2fc_cutoff_rna))
   
   if (subset_type=="all"){
-    # find overlaps and create venn diagrams and DT
-    create_venn_diagrams(subset_type,rna_df_filt,car_df_filt)
+    # create signifant merged df
     merged_df=create_overlapping_df(rna_df_filt,car_df_filt,subset_type)
-    create_overlap_chrommap(merged_df,subset_type)
-    create_overlap_DT(subset(merged_df,overlap_type=="overlap"))
+    
   } else{
     # find all genes that are defined as the shortAnno type
     # filter the RNA df for these genes
@@ -425,11 +345,20 @@ main_differential_overlap<-function(subset_type){
     # of these genes, which are in the CAR df
     car_df_filt2=subset(car_df_filt,shortAnno==subset_type)
     
-    # plot and DT
-    create_venn_diagrams(subset_type,rna_df_filt2,car_df_filt2)
+    # create signifant merged df
     merged_df=create_overlapping_df(rna_df_filt2,car_df_filt2,subset_type)
+  }
+  
+  #if there are sig genes, create venn diagrams, chrom map, DT
+  if (nrow(merged_df)!=0){
+    create_venn_diagrams(subset_type,merged_df)
     create_overlap_chrommap(merged_df,subset_type)
     create_overlap_DT(subset(merged_df,overlap_type=="overlap"))
+  } else{
+    print(paste0("There are no signifcant genes overlapping between datasets for these filters:\n",
+                 "-",contrast_id_car,"\n",
+                 "-",contrast_id_rna,"\n",
+                 "-",subset_type, "genes"))
   }
 }
 
@@ -437,7 +366,7 @@ main_differential_overlap<-function(subset_type){
 # run GSEA
 ############################################################
 # create ranked df
-prep_ranked_df<-function(subset_type,sig_type){
+prep_genelist_df<-function(subset_type,sig_type,analysis_type){
   # input dfs
   fpath=paste0(output_dir,"overlap_",subset_type,"_",contrast_id_car,"_",contrast_id_rna,".csv")
   overlap_df=read.csv(fpath)
@@ -458,8 +387,8 @@ prep_ranked_df<-function(subset_type,sig_type){
   # sort and remove dups
   dedup_df=subset(sub_df,overlap_type=="overlap")
   if (sig_type=="both"){
-    sig_RNA=subset(overlap_df,abs(log2FC_rna)>log2fc_cutoff & padj_rna<padj_cutoff)$ENSEMBL
-    sig_CAR=subset(overlap_df,abs(log2FC_car)>log2fc_cutoff & padj_car<padj_cutoff)$ENSEMBL
+    sig_RNA=subset(overlap_df,abs(log2FC_rna)>log2fc_cutoff_rna & padj_rna<padj_cutoff)$ENSEMBL
+    sig_CAR=subset(overlap_df,abs(log2FC_car)>log2fc_cutoff_car & padj_car<padj_cutoff)$ENSEMBL
     dedup_df=subset(dedup_df,ENSEMBL %in% intersect(sig_RNA,sig_CAR))
   }
   dedup_df=dedup_df[order(dedup_df$padj_rna),]
@@ -468,20 +397,27 @@ prep_ranked_df<-function(subset_type,sig_type){
   # pull significant genes ENSEMBL
   sorted_overlap_EID=dedup_df$ENSEMBL
   
-  # remove all overlap EIDs and create list of RNA only
-  sub_rna_df=rna_df[order(rna_df$padj),]
-  sub_rna_df=sub_rna_df[!duplicated(sub_rna_df$ENSEMBL),]
-  sub_rna_df=subset(sub_rna_df,ENSEMBL %ni% sorted_overlap_EID)
-  sub_rna_df=sub_rna_df%>%rename("log2FC_rna"=log2FoldChange)
-  sorted_rna_EID=sub_rna_df[order(sub_rna_df$log2FC_rna),]$ENSEMBL
+  # for GSEA analysis, output must include a ranked list of overlapping significant genes
+  # AND all RNA genes in analysis. for ORA analysis output must only include the
+  # overlapping significant genes
+  if(analysis_type=="GSEA"){
+    # remove all overlap EIDs and create list of RNA only
+    sub_rna_df=rna_df[order(rna_df$padj),]
+    sub_rna_df=sub_rna_df[!duplicated(sub_rna_df$ENSEMBL),]
+    sub_rna_df=subset(sub_rna_df,ENSEMBL %ni% sorted_overlap_EID)
+    sub_rna_df=sub_rna_df%>%rename("log2FC_rna"=log2FoldChange)
+    sorted_rna_EID=sub_rna_df[order(sub_rna_df$log2FC_rna),]$ENSEMBL
+    
+    # create final df
+    output_df=full_join(sub_rna_df,dedup_df) %>%
+      subset(ENSEMBL %in% c(sorted_overlap_EID,sorted_rna_EID))
+    rownames(output_df)=output_df$ENSEMBL
+    output_df=output_df[c(sorted_overlap_EID,sorted_rna_EID),]
+  } else if (analysis_type=="ORA"){
+    output_df=dedup_df
+  }
   
-  # create final df
-  ranked_df=full_join(sub_rna_df,dedup_df) %>%
-    subset(ENSEMBL %in% c(sorted_overlap_EID,sorted_rna_EID))
-  rownames(ranked_df)=ranked_df$ENSEMBL
-  ranked_df=ranked_df[c(sorted_overlap_EID,sorted_rna_EID),]
-  
-  return(ranked_df)
+  return(output_df)
 }
 
 # set the annotation dbs
@@ -522,6 +458,16 @@ db_lookup<-function(t2g){
   }
   
   return(db_out)
+}
+
+# create a small legend
+addSmallLegend <- function(myPlot, pointSize = 2, textSize = 5, spaceLegend = 0.1) {
+  myPlot +
+    guides(shape = guide_legend(override.aes = list(size = pointSize)),
+           color = guide_legend(override.aes = list(size = pointSize))) +
+    theme(legend.title = element_text(size = textSize), 
+          legend.text  = element_text(size = textSize),
+          legend.key.size = unit(spaceLegend, "lines"))
 }
 
 # create top pathways
@@ -567,40 +513,144 @@ create_dts_fgsea<-function(fgseaRes,db_id){
   return(sub_df[,col_select])
 }
 
-# run main GSEA function
-main_gsea_function<-function(subset_type,sig_type,db_list){
+# save plots
+print_save_plots<-function(plot_list,contrast_id,type_in){
+  # set figure caption letter
+  p=1
   
-  # prep ranked gene list
-  ranked_df=prep_ranked_df(subset_type,sig_type)
+  # ORA plots need to be merged two plots per figure
+  if (type_in == "ORA"){
+    for (i in seq(from=1,to=length(plot_list),by=2)){
+      #if it's the final image, no merging needed
+      if ((i+1)>length(plot_list)){
+        pf=cowplot::plot_grid(plot_list[[i]],
+                              ncol=1, labels=LETTERS[p])
+      } else{
+        p1=plot_list[[i]]
+        p2=plot_list[[i+1]]
+        pf=cowplot::plot_grid(p1,p2,ncol=1,
+                              labels=LETTERS[p])
+      }
+      print(pf)
+      ggsave(filename = paste0(output_dir, type_in,"_",
+                               contrast_id[1],"-",contrast_id[2], 
+                               "_dotplot_",LETTERS[p],".png"),
+             height = 8.90, width = 12.80, device = "png", plot = pf)
+      # increase counter
+      p=p+1
+    }
+  } else{
+    # GSEA plots are already merged, one plot into two, just print
+    for (i in seq(from=1,to=length(plot_list))){
+      pf = cowplot::plot_grid(plot_list[[i]],
+                              ncol=1, labels=LETTERS[p])
+      
+      #print and save
+      print(pf)
+      ggsave(filename = paste0(output_dir, type_in,"_",
+                               contrast_id[1],"-",contrast_id[2], 
+                               "_dotplot_",LETTERS[p],".png"),
+             height = 8.90, width = 12.80, device = "png", plot = pf)
+      # increase counter
+      p=p+1
+    }
+  }
+}
+
+# run ORA analysis
+ora_plus_plot <- function(sigGeneList,db_id,contrast_in,n_show=5){
+  # pull the DB
+  pulled_db=db_lookup(db_id)
+  
+  # check if gene list is in database
+  db_check=pulled_db$ensembl_gene[pulled_db$ensembl_gene %in% sigGeneList]
+  if (length(db_check)>1){
+    # run ORA
+    result=clusterProfiler::enricher(gene=sigGeneList, TERM2GENE=pulled_db, 
+                                     pvalueCutoff = padj_cutoff, 
+                                     minGSSize = minSize_gene_set)
+    resultdf=as.data.frame(result)
+  } else{
+    resultdf=data.frame()
+  }
+ 
+  
+  # write out pathways file
+  ttl_abbrev=sub(" ","_",sub(":","_",db_id))
+  fpath=paste0(output_dir,"ORA_",contrast_in[1],"-",contrast_in[2],"_table_",ttl_abbrev,".txt")
+  write.table(resultdf,file=fpath,quote=FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
+  
+  # create dotplot if pathways are sig
+  unique_pvals=length(unique(resultdf[c(1:n_show),]$p.adjust))
+  if((nrow(resultdf)==0) | (n_show-1>unique_pvals)){
+    p1 = ggparagraph( paste0("\n\n\n No Sig Results for ", "-ORA:",db_id,"\n-",
+                             contrast_in[1],"-",contrast_in[2]), 
+                      color = NULL, size = 20, face = "bold", 
+                      family = NULL, lineheight = NULL)
+  } else{
+    p1 = dotplot(result,
+                 title=paste0(contrast_in[1],"\nORA:",db_id),
+                 font.size = 6, showCategory=n_show)
+  }
+  # add small legend
+  pf = addSmallLegend(p1)
+  return(pf)
+}
+
+# main function
+main_gsea_ora_function<-function(subset_type,sig_type,db_list,analysis_type){
+  
+  # prep ranked gene list for GSEA or subset sig list for ORA
+  subset_df=prep_genelist_df(subset_type,sig_type,analysis_type=analysis_type)
   
   # create annodb top pathway df
   merged_df=data.frame()
+  
   # pull db and generate list
   for (db_id in db_list){
     anno_db=db_lookup(db_id)
     msigdbr_list=split(anno_db$ensembl_gene,anno_db$gs_name)
     
-    # create ranked input
-    ranked_list=ranked_df$log2FC_rna
-    names(ranked_list)=ranked_df$ENSEMBL  
-    
-    # run fgsea
-    #https://cran.r-project.org/web/packages/msigdbr/vignettes/msigdbr-intro.html
-    #https://bioconductor.org/packages/release/bioc/vignettes/fgsea/inst/doc/fgsea-tutorial.html
-    fgseaRes <- fgsea(msigdbr_list, ranked_list,minSize  = minSize_gene_set)
-    
-    # plot 
-    create_plot_fgsea(db_id,fgseaRes,ranked_list,msigdbr_list)
-    
-    #create merged top pathway df
-    merged_df=rbind(merged_df,create_dts_fgsea(fgseaRes,db_id))
+    if (analysis_type=="GSEA"){
+      # create ranked input
+      ranked_list=subset_df$log2FC_rna
+      names(ranked_list)=subset_df$ENSEMBL  
+      
+      # run fgsea
+      #https://cran.r-project.org/web/packages/msigdbr/vignettes/msigdbr-intro.html
+      #https://bioconductor.org/packages/release/bioc/vignettes/fgsea/inst/doc/fgsea-tutorial.html
+      fgseaRes <- fgsea(msigdbr_list, ranked_list,minSize  = minSize_gene_set)
+      
+      # plot 
+      create_plot_fgsea(db_id,fgseaRes,ranked_list,msigdbr_list)
+      
+      #create merged top pathway df
+      merged_df=rbind(merged_df,create_dts_fgsea(fgseaRes,db_id))
+    } else{
+      sigGeneList=subset_df$ENSEMBL
+      
+      # for each annotation db, run ORA, save plots
+      o=list()
+      i=1
+      for (db_id in db_list){
+        o[[i]]=ora_plus_plot(sigGeneList=sigGeneList,db_id=db_id,
+                             contrast_in=contrast_id_rna)
+        i=i+1
+      }
+    }
+  }
+  
+  # print,save ORA plots
+  if (analysis_type=="ORA"){
+    print_save_plots(o,contrast_id_rna,"ORA")
   }
   
   # print top pathway df
-  caption_title=paste0("Top pathways across all annotation databases for ", subset_type, " genes.")
+  caption_title=paste0("Top pathways across all annotation databases for ",
+                       subset_type, " genes using ", analysis_type," analysis.")
   DT::datatable(merged_df, extensions = 'Responsive', 
-                      caption=htmltools::tags$caption(paste0(caption_title),
-                                                      style="color:gray; font-size: 18px" ),
+                caption=htmltools::tags$caption(paste0(caption_title),
+                                                style="color:gray; font-size: 18px" ),
                 rownames=F)
 }
 
@@ -719,3 +769,101 @@ generate_heatmaps_contrasts<-function(df_in,title_in){
                        show_colnames = FALSE)
   }
 }
+
+############################################################
+# pie charts for gene lists
+############################################################
+# create pie chart for significant peaks within PI gene list for promoters
+plot_pies_genelist<-function(df_in,y_in,percent_in,fill_in,title_in){
+  p = ggplot(df_in, aes(x = "" , y = get(y_in), fill = fct_inorder(get(fill_in)))) +
+    geom_col(width = 1, color = 1) +
+    coord_polar(theta = "y") +
+    scale_fill_brewer(palette = "Pastel1") +
+    geom_label_repel(data = df_in,
+                     aes(y = pos, label = paste0(get(percent_in), "%")),
+                     size = 4, nudge_x = 1, show.legend = FALSE) +
+    guides(fill = guide_legend(title = "Group")) +
+    ggtitle(title_in) +
+    theme_void()
+  
+  return(p)
+}
+
+# main function to generate pie charts
+generate_piecharts_from_genelist<-function(sample_id,subset_type="Promoter"){
+  #sample_id=contrast_id
+  # bring in dfs
+  fpath=paste0(output_car_dir,"collapsed_df.csv")
+  collapsed_df=read.csv(fpath,sep=",")
+  
+  fpath=paste0(output_car_dir,"collapsed_pi_df.csv")
+  collapsed_pi_df=read.csv(fpath,sep=",")
+  
+  # subset for sample
+  sub_col_df=subset(collapsed_df,sample==sample_id)
+  sub_pi_df=subset(collapsed_pi_df,sample==sample_id)
+  
+  # calculate counts
+  REPRESSORS=nrow(subset(sub_pi_df,gene_list=="REPRESSORS" & shortAnno==subset_type))
+  REPRESSORS_total=nrow(subset(gene_list,Set=="REPRESSORS"))
+  REPRESSORS_perc=round((REPRESSORS/REPRESSORS_total)*100,2)
+  ACCELERATORS=nrow(subset(sub_pi_df,gene_list=="ACCELERATORS"& shortAnno==subset_type))
+  ACCELERATORS_total=nrow(subset(gene_list,Set=="ACCELERATORS"))
+  ACCELERATORS_perc=round((ACCELERATORS/ACCELERATORS_total)*100,2)
+  INVASION=nrow(subset(sub_pi_df,gene_list=="INVASION"& shortAnno==subset_type))
+  INVASION_total=nrow(subset(gene_list,Set=="INVASION"))
+  INVASION_perc=round((INVASION/INVASION_total)*100,2)
+  total=unique(sub_col_df$total)
+  other=total-sum(REPRESSORS,ACCELERATORS,INVASION)
+  
+  # create df
+  tmp_df=data.frame("IDENTIFIED","REPRESSORS",REPRESSORS,round((REPRESSORS/total)*100,2),REPRESSORS_perc)
+  tmp_df=rbind(tmp_df,c("IDENTIFIED","ACCELERATORS",ACCELERATORS,round((ACCELERATORS/total)*100,2),ACCELERATORS_perc))
+  tmp_df=rbind(tmp_df,c("IDENTIFIED","INVASION",INVASION,round((INVASION/total)*100,2),INVASION_perc))
+  tmp_df=rbind(tmp_df,c("IDENTIFIED","OTHER",other,round((other/total)*100,2),0))
+  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","REPRESSORS",REPRESSORS_total-REPRESSORS,0,(100-REPRESSORS_perc)))
+  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","ACCELERATORS",ACCELERATORS_total-ACCELERATORS,0,100-ACCELERATORS_perc))
+  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","INVASION",INVASION_total-INVASION,0,100-INVASION_perc))
+  colnames(tmp_df)=c("Search","Category","n","perc","perc_list")
+  tmp_df$n=as.numeric(tmp_df$n)
+  
+  ## all totals
+  tmp_sub_df <- subset(tmp_df,Search=="IDENTIFIED") %>%
+    mutate(csum = rev(cumsum(rev(n))),
+           pos = n/2 + lead(csum, 1),
+           pos = if_else(is.na(pos), n/2, pos))
+  plot_title=paste0("All Genes (",sum(tmp_sub_df$n),")")
+  p1 = plot_pies_genelist(tmp_sub_df,"n","perc","Category",plot_title)
+  
+  ## ACCELERATORS
+  tmp_sub_df <- subset(tmp_df,Category=="ACCELERATORS") %>%
+    mutate(csum = rev(cumsum(rev(n))),
+           pos = n/2 + lead(csum, 1),
+           pos = if_else(is.na(pos), n/2, pos))
+  plot_title=paste0("    ACCELERATORS Genes (N=16)")
+  p2 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
+  
+  ## REPRESSORS
+  tmp_sub_df <- subset(tmp_df,Category=="REPRESSORS") %>%
+    mutate(csum = rev(cumsum(rev(n))), 
+           pos = n/2 + lead(csum, 1),
+           pos = if_else(is.na(pos), n/2, pos))
+  plot_title=paste0("    REPRESSORS Genes (N=10)")
+  p3 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
+  
+  ## INVASION
+  tmp_sub_df <- subset(tmp_df,Category=="INVASION") %>%
+    mutate(csum = rev(cumsum(rev(n))), 
+           pos = n/2 + lead(csum, 1),
+           pos = if_else(is.na(pos), n/2, pos))
+  plot_title=paste0("    INVASION Genes (N=16)")
+  p4 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
+  
+  p_final=ggarrange(p1,p2,p3,p4,
+                    labels = c("A","B","C","D"),
+                    ncol = 2, nrow = 2)
+  plot_title=paste0("Significant Peaks by Gene Lists in ",subset_type,":\n",unique(sub_col_df$sample))
+  p_final=annotate_figure(p_final, top = text_grob(plot_title, face = "bold", size = 14))
+  print(p_final)
+}
+

@@ -162,8 +162,9 @@ generate_pca_plots<-function(dds,sampleinfo,exclusionlist){
   print(p)
 }
 
-peak_annotation<-function(res,contrast_id){
-  x = as.data.frame(rownames(res)) 
+peak_annotation<-function(result_dds,contrast_id){
+  #https://bioinformatics-core-shared-training.github.io/cruk-summer-school-2021/ChIPSeq/practicals/ChIP_Practical3_DownstreamAnalysis_2021.html
+  x = as.data.frame(rownames(result_dds)) 
   colnames(x) = c("peakID")
   x %>% separate(col = c("peakID"),into = c("chrom","coord"),sep = ":") %>% 
     separate(col = c("coord"),into = c("start","end"),sep = "-") -> x
