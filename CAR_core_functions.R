@@ -95,6 +95,13 @@ run_deseq_analysis<-function(rawcounts,sampleinfo){
                          "bedgraph",
                          "scalingfactor")
   sf_df=unique(bbpaths_df[,c("replicate","scalingfactor")])
+  
+  # print scaling factors
+  out_df=sf_df
+  rownames(out_df)=NULL
+  pander(out_df[,c("replicate","scalingfactor")],style="rmarkdown")
+  
+  # create list
   dds_cols=colnames(dds)
   sfs=c()
   for (i in dds_cols){
@@ -109,6 +116,7 @@ run_deseq_analysis<-function(rawcounts,sampleinfo){
   if (length(sfs)==length(dds_cols)){
     if (scalesfbymean == "Y") {
       sfs = sfs/mean(sfs)
+      print("Samples are spiked and scaling factor used")
     }
     
     # AUC-based counts are prescaled, but fragmentbased counts are not prescaled
@@ -164,17 +172,22 @@ generate_pca_plots<-function(dds,sampleinfo,exclusionlist){
 
 peak_annotation<-function(result_dds,contrast_id){
   #https://bioinformatics-core-shared-training.github.io/cruk-summer-school-2021/ChIPSeq/practicals/ChIP_Practical3_DownstreamAnalysis_2021.html
+  #https://support.bioconductor.org/p/103135/
   x = as.data.frame(rownames(result_dds)) 
   colnames(x) = c("peakID")
   x %>% separate(col = c("peakID"),into = c("chrom","coord"),sep = ":") %>% 
     separate(col = c("coord"),into = c("start","end"),sep = "-") -> x
   peaks <- GenomicRanges::makeGRangesFromDataFrame(x)
+  options(ChIPseeker.downstreamDistance = 0)
   peakAnno <- ChIPseeker::annotatePeak(peaks,
                                        tssRegion = c(-2000,200),
                                        TxDb = txdb,
                                        level = "gene",
                                        overlap = "all",
-                                       annoDb = annodb)
+                                       annoDb = annodb,
+                                       genomicAnnotationPriority = c("Promoter", 
+                                                                     "5UTR", "3UTR", "Exon",
+                                                                     "Intron","Intergenic"))
   pa <- as.data.frame(peakAnno)
   pa$shortAnno=stringr::word(pa$annotation,1)
   pa$shortAnno[pa$shortAnno=="5'"]="5'UTR"
@@ -183,6 +196,8 @@ peak_annotation<-function(result_dds,contrast_id){
   
   fpath=paste0(output_dir,"peak_annotation_",contrast_id,".csv")
   write.csv(pa,fpath)
+  
+  return(peakAnno)
 }
 
 main_prep_qc<-function(contrast_id,exclusionlist=""){
@@ -208,10 +223,10 @@ main_prep_qc<-function(contrast_id,exclusionlist=""){
   colnames(filtered)=shorten_sample_id(colnames(filtered))
   
   # generate RLE plot
-  generate_RLE_plot(condition1,condition2,filtered,"Fig. Before Normalization")
+  generate_RLE_plot(condition1,condition2,rawcounts,"Fig. Before Normalization")
   
   # generate boxplots
-  generate_boxplots(sampleinfo,filtered)
+  generate_boxplots(sampleinfo,rawcounts)
   
   # run deseq
   dds=run_deseq_analysis(filtered,sampleinfo)
@@ -223,7 +238,7 @@ main_prep_qc<-function(contrast_id,exclusionlist=""){
   write.csv(results_df,fpath)
   
   # annotate res
-  peak_annotation(result_dds,contrast_id)
+  peakAnno=peak_annotation(result_dds,contrast_id)
   
   # plot deseq2
   generate_RLE_plot(condition1,condition2,counts(dds, normalize=TRUE),"Fig. DESEq2 Normalization")
@@ -238,6 +253,8 @@ main_prep_qc<-function(contrast_id,exclusionlist=""){
     dds=run_deseq_analysis(filtered,sampleinfo)
     generate_pca_plots(dds,sampleinfo,exclusionlist)
   }
+  
+  return(peakAnno)
 }
 
 ############################################################
@@ -340,4 +357,17 @@ create_collapsed_pi_df<-function(merged_sig_df){
   write.csv(pi_df,fpath)
   
   return(pi_df)
+}
+
+############################################################
+# Summary graphics
+############################################################
+chipseeker_plots<-function(peakAnno){
+  #http://bioconductor.org/packages/devel/bioc/vignettes/ChIPseeker/inst/doc/ChIPseeker.html
+  (plotAnnoPie(peakAnno))
+  
+  print(upsetplot(peakAnno, vennpie=TRUE))
+
+  (plotDistToTSS(peakAnno,
+                      title="Distribution of transcription factor-binding loci\nrelative to TSS"))
 }

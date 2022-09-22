@@ -154,12 +154,13 @@ generate_volcano_plots<-function(contrast_id,gene_list_in="",gene_title_in=""){
                mode = "markers", 
                color = Significant) %>% 
     layout(title=paste0(contrast_id,"\n", gene_title_in),
-           xaxis=list(title="Fold Change",
+           xaxis=list(title="log2 Fold Change",
                       range =c(-5,5),
                       tickvals=c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
                       ticktext=c('-32','-16','-8','-4','-2',
-                                 '1','2','4','8','16','32')),
+                                 '0','2','4','8','16','32')),
            yaxis=list(title=y_title,range =c(0,15)))
+  p
   return(p)
 }
 
