@@ -1,0 +1,160 @@
+---
+title: "CCBR1155 CS029689 CUT&RUN Analysis"
+author: "Samantha Sevilla"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
+############################################################
+# project information
+############################################################
+#paths
+parent_dir="~/../../Volumes/ccbr1155/"
+input_dir = "~/../../Volumes/ccbr1155/CS029689/"
+output_dir = "~/../../Volumes/ccbr1155/CS029689/r_analysis_220920/"
+contrast_subpath=paste0(input_dir,"carlisle_220920/results/peaks/contrasts/")
+dir.create(file.path(output_dir), showWarnings = FALSE)
+```
+
+```{r user_params}
+############################################################
+# set global variables 
+############################################################
+p_val_set = 0.05
+species = "Homo Sapiens"
+log2fc_cutoff=abs(log2(.3))
+method="fragments" #AUC or fragments
+dedup_status="dedup"
+norm_type_cutandrun="norm.relaxed"
+scalesfbymean="Y"
+rawcountsprescaled="N"
+
+# reference info
+if (species=="Homo Sapiens"){
+  txdb_pkg="TxDb.Hsapiens.UCSC.hg38.knownGene"
+}
+
+# group to ignore
+ignore_groups=c()
+
+# extension name
+extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
+```
+
+```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
+# package list
+list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb_pkg, "UpSetR","ggupset","ggimage")
+
+#install as needed
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) BiocManager::install(new.packages)
+
+# source functions
+source('CAR_core_functions.R')
+
+# load packages
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+#negate
+`%ni%` <- Negate(`%in%`)
+
+# assign annodbs
+if (species=="Homo Sapiens"){
+  txdb<-TxDb.Hsapiens.UCSC.hg38.knownGene
+  annodb="org.Hs.eg.db"
+}
+```
+
+## **Data Processing**
+```{r contrast, include=FALSE,warning=FALSE, message=FALSE}
+####################
+# run metadata input
+####################
+#groups input
+groups_df = read.csv(paste0(input_dir,"groups.tab"),sep="\t",header = FALSE)[,c("V1","V2")]
+colnames(groups_df) = c("sampleid","group")
+rownames(groups_df)=groups_df$sampleid
+
+## if there is a subset gene list, select files
+gene_file = paste0(parent_dir,"docs/merged_gene_list_v2.csv")
+pi_gene_df = read.csv(gene_file)
+
+# read in the contrast list
+contrast_df=read.csv(paste0(input_dir,"contrasts.tsv"),sep="\t")
+colnames(contrast_df)=c("CNTRL","TREATMENT")
+contrast_df$contrast=paste0(contrast_df$CNTRL,"_vs_",contrast_df$TREATMENT)
+
+#filter
+groups_df=subset(groups_df, group %ni% ignore_groups)
+contrast_df=subset(contrast_df, (CNTRL %in% unique(groups_df$group)) | (TREATMENT %in% unique(groups_df$group)))
+```
+
+The following samples are included in this analysis:
+```{r dt_samp, echo=FALSE,warning=FALSE, message=FALSE}
+DT::datatable(groups_df)
+```
+
+The following contrasts are included in this analysis:
+```{r dt_group, echo=FALSE,warning=FALSE, message=FALSE}
+DT::datatable(contrast_df)
+```
+
+## **Quality Control**
+Raw counts are read in and filtered by counts per million reads (CPM). Filtering thresholds are set such that at least two samples must have a CPM of >0.5 to be reviewed. Two plots were generated for each sample: Relative log expression (RLE) plots and Principal Coordinate Analysis (PCA) plots.
+
+Reviewing sample QC allows us to determine if there are outliers present in analysis and the success of data normalization. If there are, samples are removed in the "Selected Samples Normalized" plots.
+
+## Quality Control  {.tabset}
+
+#### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb
+```{r qc1, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
+exclusion_list=c()
+contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb"
+peak_anno_4 = main_prep_qc(contrast_id,exclusion_list)
+```
+
+#### 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb
+```{r qc2, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
+exclusion_list=c()
+contrast_id="5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb"
+peak_anno_9 = main_prep_qc(contrast_id,exclusion_list)
+```
+
+## **Data Processing**
+Reviewing counts of significant peaks guides analysis parameters downstream.
+
+```{r collapsedf, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
+#read gene list
+gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
+
+# create significant gene lists
+contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb"
+merged_sig_df=create_sig_df(contrast_id)
+
+contrast_id="5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb"
+merged_sig_df=full_join(merged_sig_df,
+                        create_sig_df(contrast_id))
+
+# collapse counts
+collapsed_df=create_collapsed_df(merged_sig_df)
+collapsed_pi_df=create_collapsed_pi_df(merged_sig_df)
+```
+
+
+Review summary annotation for all peaks.
+
+### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb
+
+```{r graphics1,echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
+chipseeker_plots(peak_anno_4)
+```
+
+### 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb
+
+```{r graphics2,echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
+chipseeker_plots(peak_anno_9)
+```
+
