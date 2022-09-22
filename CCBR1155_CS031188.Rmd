@@ -1,0 +1,337 @@
+---
+title: "CCBR1155_Analysis"
+author: "Samantha Sevilla"
+date: "4/15/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+packages=c("dplyr","ggplot2","ggpubr","ComplexUpset","msigdbr","clusterProfiler","ggrepel","tidyverse")
+invisible(lapply(packages, library, character.only = TRUE))
+```
+
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+#paths
+parent_dir="~/../../Volumes/projects/ccbr1155/CS031188_Symd3_carlisle/results/peaks/contrasts/"
+out_dir = "~/../../Volumes/projects/ccbr1155/CS031188_Symd3_carlisle/results/peaks/contrasts/sam_pass2/ora_results"
+dir.create(file.path(out_dir), showWarnings = FALSE)
+
+#sample list
+sample_id="MOC1_CRISPR_Smyd3_KO_10_Smyd3_350K_0_35ng_0_25_HCHO_2m_vs_MOC1_CRISPR_NC_2_Smyd3_350K_0_35ng_0_25_HCHO_2m"
+extensions=c("__dedup__norm.relaxed.bed")
+file_list=paste0(sample_id,extensions)
+file_list
+
+#set global variables 
+p_val_set = 0.05
+species = "mouse"
+log2fc_set = log(1.5,2)
+```
+
+```{r echo=FALSE}
+#read in results file, add to df
+method="AUC"
+merged_df=data.frame()
+for (sample_id in file_list){
+  # read in results and filter
+  # pvalue <0.05, log2FoldChange +- log2(1.5)
+  raw_df=read.csv(paste0(parent_dir,sample_id,"/",sample_id,"_",method,"based_diffresults.txt"),sep = "\t")
+  filt_df=subset(raw_df,pvalue<p_val_set)
+  filt_df=subset(filt_df,(log2FoldChange>=log2fc_set) | (log2FoldChange<=-log2fc_set))
+  
+  #add metadata
+  filt_df$sample=gsub("Smyd3_350K_0_35ng_0_25_HCHO_2m_","",strsplit(sample_id,"__")[[1]][1])
+  filt_df$dedup=strsplit(sample_id,"__")[[1]][2]
+  filt_df$type=strsplit(strsplit(sample_id,"__")[[1]][3],"[.]")[[1]][2]
+  filt_df$type=filt_df$type %>% replace(is.na(.),"narrowPeak")
+  filt_df$method=method
+  filt_df$total=nrow(filt_df)
+  filt_df$uniqueid=paste0(filt_df$sample,"_",filt_df$dedup,"_",filt_df$type)
+  
+  #merge dfs
+  merged_df=rbind(merged_df,filt_df)
+}
+
+# collapse to get shortAnno counts
+collapsed_df=merged_df %>% count(sample,shortAnno,dedup,type,method,total,uniqueid)
+
+#calculate percentages
+collapsed_df$perc=round((collapsed_df$n/collapsed_df$total)*100,2)
+
+# create samplename shorthands
+shorten_sample_id<-function(input_id){
+  output_id=gsub("_350K_0_35ng_0_25_HCHO_2m","",input_id)
+  output_id=gsub("MOC1_CRISPR_","",output_id)
+  output_id=gsub("_10","",output_id)
+  output_id=gsub("_2_Smyd3","",output_id)
+  output_id=gsub("Smyd3_v","v",output_id)
+  output_id=strsplit(output_id,"__")[[1]][1]
+  return(output_id)
+}
+collapsed_df$sample_sub = shorten_sample_id(collapsed_df$sample)
+```
+
+######################################################################
+# Question #1: Overall distribution
+######################################################################
+
+```{r echo=FALSE, warning=FALSE}
+# create pie chart for each comparison
+for (sample_id in unique(collapsed_df$sample_sub)){
+  # subset for sample
+  sub_df=subset(collapsed_df,sample_sub==sample_id)
+  
+  # get positions
+  df2 <- sub_df %>% 
+  mutate(csum = rev(cumsum(rev(n))), 
+         pos = n/2 + lead(csum, 1),
+         pos = if_else(is.na(pos), n/2, pos))
+
+  p = ggplot(sub_df, aes(x = "" , y = n, fill = fct_inorder(shortAnno))) +
+    geom_col(width = 1, color = 1) +
+    coord_polar(theta = "y") +
+    scale_fill_brewer(palette = "Pastel1") +
+    geom_label_repel(data = df2,
+                     aes(y = pos, label = paste0(perc, "%")),
+                     size = 4.5, nudge_x = 1, show.legend = FALSE) +
+    guides(fill = guide_legend(title = "Group")) +
+    ggtitle(paste0("Significant peaks by type for: ",sample_id)) +
+    theme_void()
+  print(p)
+}
+
+# subset for introns and promoters
+subset(collapsed_df,shortAnno=="Intron" | shortAnno=="Promoter") %>%
+  ggplot(aes(x=dedup,y=perc,fill=shortAnno,label=perc))+
+  geom_bar(stat = "identity")+
+  facet_grid(~sample_sub)+
+  ylab("Percent of occurances") +
+  ggtitle("Percent of significant peaks type, subset") +
+  scale_x_discrete(guide = guide_axis(angle = 90))+
+  geom_text(size = 3, position = position_stack(vjust = 0.5))
+```
+
+######################################################################
+# Heatmaps
+######################################################################
+
+```{r echo=FALSE, warning=FALSE}
+create_heat_maps<-function(feature_in, sample_list,title_in){
+  
+  #subset for feature and samples
+  sub_df=subset(merged_df,shortAnno==feature_in & uniqueid %in% sample_list)
+  sub_df=sub_df[complete.cases(sub_df),]
+  
+  #for each sample log2foldchange values for each gene
+  heatmap_df=data.frame()
+  for(rowid in rownames(sub_df)){
+    sample_id=sub_df[rowid,"uniqueid"]
+    gene_id=sub_df[rowid,"SYMBOL"]
+    heatmap_df[sample_id,gene_id]=sub_df[rowid,"log2FoldChange"]
+  }
+
+  # shorten rownames
+  rownames(heatmap_df)=gsub("_relaxed","",rownames(heatmap_df))
+  rownames(heatmap_df)=gsub("_stringent","",rownames(heatmap_df))
+  rownames(heatmap_df)=gsub("_narrowPeak","",rownames(heatmap_df))
+  rownames(heatmap_df)=gsub("_dedup","",rownames(heatmap_df))
+  rownames(heatmap_df)=gsub("_no","",rownames(heatmap_df))
+  
+  #set colors
+  paletteLength <- 1000
+  mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
+  
+  # scale
+  
+  scale_df= t(scale(t(heatmap_df)))
+  scale_df=as.matrix(scale_df %>% replace(is.na(.), 0))
+  
+  if(ncol(scale_df)<90){
+    pheatmap::pheatmap(scale_df, 
+             scale = "none", main=title_in,
+             fontsize = 10, fontsize_row = 6, fontsize_col = 6, color = mycolors, 
+             border_color = "NA",
+             legend_breaks = c(-5,-4,-3,-2,-1,0,1,2,3,4,5))
+  }else{
+    pheatmap::pheatmap(scale_df, 
+             scale = "none", main=title_in,
+             fontsize = 10, fontsize_row = 6, fontsize_col = 6, color = mycolors, 
+             border_color = "NA",
+             legend_breaks = c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
+             show_colnames = FALSE)
+  }
+}
+
+feature_list=c("Promoter","Intron")
+# for (feature_id in feature_list){
+#   create_heat_maps(feature_id,c("MOC1_CRISPR_Smyd3_KO_10_vs_MOC1_CRISPR_NC_2_Smyd3_350K_0_35ng_0_25_HCHO_2m_dedup_relaxed"),
+#                       paste0(feature_id," Genes: Relaxed - Stringent"))
+#   create_heat_maps(feature_id,c("MOC1_CRISPR_Smyd3_KO_10_vs_MOC1_CRISPR_NC_2_Smyd3_350K_0_35ng_0_25_HCHO_2m_dedup_relaxed","MOC1_CRISPR_Smyd3_KO_10_vs_MOC1_CRISPR_NC_2_Smyd3_350K_0_35ng_0_25_HCHO_2m_dedup_narrowPeak"),
+#                       paste0(feature_id," Genes: Relaxed - NarrowPeak"))
+#   create_heat_maps(feature_id,c("MOC1_CRISPR_Smyd3_KO_10_vs_MOC1_CRISPR_NC_2_Smyd3_350K_0_35ng_0_25_HCHO_2m_dedup_stringent","MOC1_CRISPR_Smyd3_KO_10_vs_MOC1_CRISPR_NC_2_Smyd3_350K_0_35ng_0_25_HCHO_2m_dedup_narrowPeak"),
+#                       paste0(feature_id," Genes: Stringent - NarrowPeak"))
+# }
+```
+
+######################################################################
+# ORA
+######################################################################
+
+```{r functions, include=FALSE}
+######################################################################
+# ORA Functions
+######################################################################
+readdegfile<-function(fn){
+  x=read.csv(fn,header=TRUE,sep="\t")
+  return(as.data.frame(x))
+}
+
+deg2geneList<-function(deg){
+  gl=as.data.frame(deg$gsea_ranking_score)
+  gl$GN=deg$gene
+  colnames(gl)=c("Rank","GeneName")
+  gl$absRank=abs(gl$Rank)
+  gl=gl[order(gl$absRank,decreasing = TRUE),]
+  gl=gl[match(unique(gl$GeneName),gl$GeneName),]
+  geneList=gl$Rank
+  names(geneList)=as.character(gl$GeneName)
+  geneList <- sort(geneList, decreasing = TRUE)
+  return(geneList)
+}
+
+ora_plus_plot <- function(gl,t2g,ttl,fn,ref_type){
+  result=enricher(gene=gl, TERM2GENE=t2g, pvalueCutoff = 1)
+  resultdf=as.data.frame(result)
+  write.table(resultdf,file=fn,quote=FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
+  
+  if(nrow(resultdf)==0){
+    print("No sig results for ORA")
+    p1 = ggparagraph(
+      paste0("\n\n\n No Sig Results for ",ref_type),
+      color = NULL,
+      size = 20,
+      face = "bold",
+      family = NULL,
+      lineheight = NULL
+    )
+  } else{
+    p1 = dotplot(result,title=ttl,font.size = 8, showCategory=10)
+  }
+  return(p1)
+}
+
+save_plots<-function(p1,p2,contrast_id,results_dir,file_name){
+  if (p2=="none"){
+    mypdf <- cowplot::plot_grid(p1, ncol=1, labels=LETTERS[1])
+    print(mypdf)
+    ggsave(filename = paste(results_dir, contrast_id, file_name, sep=""), 
+           height = 8.90, width = 12.80, device = "png", plot = mypdf)
+  } else{
+    mypdf <- cowplot::plot_grid(p1, p2,ncol=1, labels=LETTERS[1:2])
+    print(mypdf)
+    ggsave(filename = paste(results_dir, contrast_id, file_name, sep=""), 
+           height = 8.90, width = 12.80, device = "png", plot = mypdf)
+  }
+}
+
+main_function<-function(deg_file,results_dir,contrast_id){
+  
+  # read deg
+  deg=readdegfile(deg_file)
+  
+  #create output dir if needed
+  dir.create(file.path(results_dir), showWarnings = FALSE)
+
+  #subset significant genes for ORA
+  siggenes=deg[deg$pvalue <= p_val_set & (deg$log2FoldChange < (-1*log2fc_set) | deg$log2FoldChange > log2fc_set),]
+  sigGeneList=siggenes$SYMBOL
+  
+  #generate gene lists for C2 with subtypes biocarta, kegg, reactome, wiki
+  c2b=msigdbr(species = species, category = "C2", subcategory = "BIOCARTA") %>% 
+    dplyr::select(gs_name,gene_symbol)
+  
+  c2k=msigdbr(species = species, category = "C2", subcategory = "KEGG") %>% 
+    dplyr::select(gs_name,gene_symbol)
+  
+  c2r=msigdbr(species = species, category = "C2", subcategory = "REACTOME") %>%
+    dplyr::select(gs_name,gene_symbol)
+  
+  c2w=msigdbr(species = species, category = "C2", subcategory = "WIKIPATHWAYS") %>%
+    dplyr::select(gs_name,gene_symbol)
+  
+  #generate gene lists for C5 with subtypes MF, BP, CC
+  c5gomf=msigdbr(species = species,  category = "C5", subcategory = "GO:MF") %>% dplyr::select(gs_name,gene_symbol)
+  c5gobp=msigdbr(species = species,  category = "C5", subcategory = "GO:BP") %>% dplyr::select(gs_name,gene_symbol)
+  c5gocc=msigdbr(species = species,  category = "C5", subcategory = "GO:CC") %>% dplyr::select(gs_name,gene_symbol)
+  
+  ## C2:BIOCARTA
+  ref_type="ORA:BIOCARTA"
+  print(paste0("Results for ", ref_type))
+  p1 = ora_plus_plot(gl=sigGeneList,t2g=c2b,ttl=paste0(ref_type,": ", contrast_id),
+                     fn=paste(results_dir,contrast_id,".c2b.ora.results.txt",sep=""),
+                     ref_type)
+
+  ## C2:KEGG
+  ref_type="ORA:KEGG"
+  print(paste0("Results for ", ref_type))
+  p2 = ora_plus_plot(gl=sigGeneList,t2g=c2k,ttl=paste0(ref_type,": ", contrast_id),
+                     fn=paste(results_dir,contrast_id,".c2k.ora.results.txt",sep=""),
+                     ref_type)
+  save_plots(p1,p2,results_dir,contrast_id,".c2bk.dotplot.png")
+
+  ## C2:REACTOME
+  ref_type="ORA:REACTOME"
+  print(paste0("Results for ", ref_type))
+  p1 = ora_plus_plot(gl=sigGeneList,t2g=c2r,ttl=paste0(ref_type,": ", contrast_id),
+                     fn=paste(results_dir,contrast_id,".c2r.ora.results.txt",sep=""),
+                     ref_type)
+  
+  ## C2:WIKIPATHWAYS
+  ref_type="ORA:WIKIPATHWAYS"
+  print(paste0("Results for ", ref_type))
+  p2 = ora_plus_plot(gl=sigGeneList,t2g=c2w,ttl=paste0(ref_type,": ", contrast_id),
+                   fn=paste(results_dir,contrast_id,".c2w.ora.results.txt",sep=""),
+                     ref_type)
+  save_plots(p1,p2,contrast_id,results_dir,".c2rw.dotplot.png")
+
+  ## C5:GO:MF
+  ref_type="ORA:GO:MF"
+  print(paste0("Results for ", ref_type))
+  p1 = ora_plus_plot(gl=sigGeneList,t2g=c5gomf,ttl=paste0(ref_type,": ", contrast_id),
+                   fn=paste(results_dir,contrast_id,".c5gomf.ora.results.txt",sep=""),
+                     ref_type)
+
+  ## C5:GO:BP
+  ref_type="ORA:GO:BP"
+  print(paste0("Results for ", ref_type))
+  p2 = ora_plus_plot(gl=sigGeneList,t2g=c5gobp,ttl=paste0(ref_type,": ", contrast_id),
+                   fn=paste(results_dir,contrast_id,".c5gobp.ora.results.txt",sep=""),
+                     ref_type)
+  save_plots(p1,p2,contrast_id,results_dir,".c5gomfbp.dotplot.png")
+
+  ## C5:GO:CC
+  ref_type="ORA:GO:CC"
+  print(paste0("Results for ", ref_type))
+  p1 = ora_plus_plot(gl=sigGeneList,t2g=c5gocc,ttl=paste0(ref_type,": ", contrast_id),
+                   fn=paste(results_dir,contrast_id,".c5gocc.ora.results.txt",sep=""),
+                     ref_type)
+  save_plots(p1,"none",contrast_id,results_dir,".c5gocc.dotplot.png")
+}
+```
+
+```{r setup, include=FALSE}
+#####################################
+# ORA Run
+#####################################
+for (sample_id in file_list){
+  sub_sample_id=shorten_sample_id(sample_id)
+
+  print(sub_sample_id)
+  main_function(deg_file = paste0(parent_dir,sample_id,"/",sample_id,"_",method,"based_diffresults.txt"), 
+       results_dir = paste0(out_dir,"/",sub_sample_id,"/"),
+       contrast_id = paste0(sub_sample_id))
+
+}
+```

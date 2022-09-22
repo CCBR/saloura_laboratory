@@ -1,0 +1,288 @@
+---
+title: "CCBR1155 CS028891 RNA Analysis"
+author: "Samantha Sevilla"
+date: '2022-08-23'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+#dirs
+parent_dir="~/../../Volumes/ccbr1155/"
+input_dir = "~/../../Volumes/ccbr1155/CS028891/pipeliner_220713/"
+output_dir = "~/../../Volumes/ccbr1155/CS028891/r_analysis_220822/"
+dir.create(file.path(output_dir), showWarnings = FALSE)
+```
+
+```{r thresholds}
+# group to ignore
+ignore_groups=c("CRISPR_52_with_IFNb","CRISPR_53_with_IFNb","parental_HN6_with_IFNb")
+
+#cntrl
+cntrl="parental_HN6_without_IFNb"
+
+# Threshold values
+log2fc_cutoff=1.5
+padj_cutoff=0.05
+species_in = "Homo sapiens" #either "Homo sapiens" or "Mus musculus"
+analysis_type = "DESeq2" #either limma or DESeq2
+
+#databases to include in analysis options include:
+#http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+#"C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H"
+db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H")
+
+```
+
+```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
+#species db
+if (species_in == "Homo sapiens"){
+  species_db="org.Hs.eg.db"
+} else if (species_in == "Mus musculus"){
+  species_db="org.Mm.eg.db"
+} else{
+    print("Species not approved")
+}
+
+# package list
+list.of.packages=c("BiocManager","tidyr","DT","RUVSeq","RColorBrewer","textshape",
+                   "pheatmap","grid","dplyr","EnhancedVolcano","edgeR","DESeq2","ggplot2","plotly",
+                   "msigdbr","clusterProfiler","ggpubr","ggridges","factoextra","gplots","ReactomePA",species_db)
+
+#install as needed
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) BiocManager::install(new.packages)
+
+# source functions
+source('RNASeq_core_functions.R')
+
+# load packages
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+#negate
+`%ni%` <- Negate(`%in%`)
+```
+
+
+## **Data Processing**
+
+```{r contrast, include=FALSE}
+####################
+# run metadata input
+####################
+#id counts fil
+RSEM_file = "RawCountFile_RSEM_genes.txt" #normalized count file
+
+#groups input
+groups_df = read.csv(paste0(input_dir,"groups.tab"),sep="\t",header = FALSE)[,c("V1","V2")]
+colnames(groups_df) = c("sampleid","group")
+rownames(groups_df)=groups_df$sampleid
+
+## if there is a subset gene list, select files
+gene_file = paste0(parent_dir,"docs/merged_gene_list_v2.csv")
+pi_gene_df = read.csv(gene_file)
+
+# read in the contrast list
+contrast_df=read.csv(paste0(input_dir,"contrasts.tab"),header=FALSE,sep="\t")
+contrast_df$V1=gsub("  "," ",contrast_df$V1)
+contrast_df$V1=gsub("  "," ",contrast_df$V1)
+colnames(contrast_df)=c("CNTRL","TREATMENT")
+contrast_df$contrast=paste0(contrast_df$CNTRL,"_vs_",contrast_df$TREATMENT)
+
+#filter
+groups_df=subset(groups_df, group %ni% ignore_groups)
+contrast_df=subset(contrast_df, (CNTRL %in% unique(groups_df$group)) | (TREATMENT %in% unique(groups_df$group)))
+```
+
+The following samples are included in this analysis:
+```{r dt_samp, echo=FALSE}
+DT::datatable(groups_df)
+```
+
+The following contrasts are including in this analysis:
+```{r dt_group, echo=FALSE}
+DT::datatable(contrast_df)
+```
+
+Raw counts are read in and filtered by counts per million reads (CPM). Filtering thresholds are set such that at least two samples must have a CPM of >0.5 to be reviewed. Two plots were generated for each sample: Relative log expression (RLE) plots and Principal Coordinate Analysis (PCA) plots.
+
+```{r raw_run, echo=FALSE, warning=FALSE, message=FALSE}
+#load counts
+raw_counts= read.csv(paste0(input_dir,"DEG_ALL/",RSEM_file),sep="\t")
+raw_counts=raw_counts[,c("symbol",groups_df$sampleid)]
+
+## Filter by CPM
+#CPM is calcualted as "how many counts would I get for a gene if the sample had a library size of 1M".
+raw_counts=column_to_rownames(raw_counts)
+raw_counts=ceiling(raw_counts)
+cpm_counts=edgeR::cpm(as.matrix(raw_counts))
+log_cpm_counts=log2(cpm_counts)
+keep=rowSums(cpm_counts>0.5)>2
+
+filtered=raw_counts[keep,]
+colnames(filtered)=shorten_names(colnames(filtered))
+
+#set colors
+colors <- brewer.pal(6, "Set2")
+x=shorten_names(groups_df$group)
+x=as.factor(x)#set pheno data
+
+#Plot results
+par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
+plotRLE(as.matrix(filtered), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
+plotPCA(as.matrix(filtered), col=colors[x], cex=.8)
+mtext("Fig. Before Normalization", side=2, outer=TRUE, adj=0)
+```
+
+Upper quantile normalization was attempted. This provided some correction, however, variance is still not near 0 in some samples.
+
+```{r upper, echo=FALSE}
+#merge into object
+set <- newSeqExpressionSet(as.matrix(filtered),
+                           phenoData = data.frame(x, row.names=colnames(filtered)))
+set_u <- betweenLaneNormalization(set, which="upper")
+par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
+plotRLE(set_u, outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
+plotPCA(set_u, col=colors[x], cex=.8)
+mtext("Fig. UpperQuant Normalization", side=2, outer=TRUE, adj=0)
+```
+
+Finally, DESEQ2 normalization was attempted. This provided the best correction and was selected as the normalization technique.
+
+```{r deseq, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
+#run DESEQ2
+dds <- DESeqDataSetFromMatrix(countData = counts(set),
+                              colData = pData(set),
+                              design = ~ x)
+dds <- DESeq(dds)
+```
+
+```{r echo=FALSE}
+par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
+plotRLE(counts(dds, normalize=TRUE), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
+plotPCA(counts(dds,normalize=TRUE), col=colors[x], cex=.8)
+mtext("Fig. DESEq2 Normalization", side=2, outer=TRUE, adj=0)
+```
+
+The data used for downstream analysis was DESEQ2 normalized and comparisons were made between samples.
+
+```{r deg_run, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
+treatment="CRISPR_52_without_IFNb"
+deg_group_add(cntrl,treatment)
+
+treatment="CRISPR_53_without_IFNb"
+deg_group_add(cntrl,treatment)
+```
+
+## **Heatmaps**
+
+```{r echo=FALSE,warning=FALSE, message=FALSE}
+####################
+# run heatmaps
+###################
+# find significant genes
+treatment="CRISPR_52_without_IFNb"
+merged_fc=create_sig_gene_df(cntrl,treatment,25)
+
+treatment="CRISPR_53_without_IFNb"
+merged_fc=full_join(merged_fc,create_sig_gene_df(cntrl,treatment,25))
+
+# fill in NA's in gene list
+merged_fc=fillin_sig_gene_df(merged_fc)
+
+#subset for logfc only
+heatmap_df=create_heatmap_df(merged_fc,"_without_IFNb")
+
+# create output df
+create_output_df(merged_fc,25,"_without_IFNb")
+
+# create heatmap
+generate_heat_map(heatmap_df)
+```
+
+## **Volcano Plots**
+
+Volcano plots are created to show the statistical significance (p-value or FDR) versus magnitude of change (fold change).
+
+### CRISPR_52_without_IFNb {.tabset}
+#### p-value
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+treatment="CRISPR_52_without_IFNb"
+type_in="pvalue"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+#### FDR
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+treatment="CRISPR_52_without_IFNb"
+type_in="FDR"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+### CRISPR_53_without_IFNb {.tabset}
+#### p-value
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+treatment="CRISPR_53_without_IFNb"
+type_in="pvalue"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+#### FDR
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+treatment="CRISPR_53_without_IFNb"
+type_in="FDR"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+## **Enriched Pathways** 
+
+Pathway analysis was performed using several publicly available databases (http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp). For each database, dotplots 
+for the top pathways suppressed and activated are highlighted. This plot depicts 
+the enrichment scores (p values) and gene ratio as color and size, respectively.
+Ridgeplots are also visualize enriched terms and their expression distributions 
+of core enriched genes.
+
+### Enrichment {.tabset}
+
+#### CRISPR_52
+```{r oragsea_run1, echo=FALSE, message=FALSE, warning=FALSE}
+######################################################################
+# run ORA/GSEA
+######################################################################
+treatment="CRISPR_52_without_IFNb"
+main_gsea_ora_function(cntrl_in=cntrl,
+              treat_in=treatment,
+              db_list,
+              top_path_value=50,
+              ORA_flag = "OFF",
+              GSEA_flag = "ON")
+```
+
+#### CRISPR_53
+```{r oragsea_run2, echo=FALSE, message=FALSE, warning=FALSE}
+treatment="CRISPR_53_without_IFNb"
+main_gsea_ora_function(cntrl_in=cntrl,
+              treat_in=treatment,
+              db_list,
+              top_path_value=50,
+              ORA_flag = "OFF",
+              GSEA_flag = "ON")
+```
+
+## **Selected Pathways** 
+
+Pathways of interest can be reviewed per sample. For example, pathway "chr18q21" from database "C1" is reviewed below. All significant genes that were implicated in this pathway were plotted in a heatmap, as well as a in a GSEA plot. Finally, a data table of all genes are provided for review.
+
+```{r selectpath_run, echo=FALSE, message=FALSE, warning=FALSE, out.width="50%"}
+######################################################################
+# run specific pathway analysis
+######################################################################
+treatment="CRISPR_52_without_IFNb"
+main_selectpath_function(t2g="C1",
+                        type_in="GSEA",
+                        path_id="chr18q21",
+                       cntrl_in=cntrl,
+                       treat_in=treatment)
+```
