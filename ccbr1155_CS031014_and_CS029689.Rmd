@@ -1,0 +1,185 @@
+---
+title: "CCBR1155 CS031014 and CS029689 Joint Analysis"
+author: "Samantha Sevilla"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
+############################################################
+# project information
+############################################################
+#paths
+parent_dir="~/../../Volumes/ccbr1155/"
+input_car_dir1 = "~/../../Volumes/ccbr1155/CS031014/"
+contrast_subpath1=paste0(input_car_dir1,"/carlisle_220919/results/peaks/contrasts/")
+
+input_car_dir2 = "~/../../Volumes/ccbr1155/CS029689/"
+contrast_subpath2=paste0(input_car_dir2,"/carlisle_220919/results/peaks/contrasts/")
+
+output_dir = "~/../../Volumes/ccbr1155/CS031014_CS029689/r_analysis_220919/"
+output_car_dir=output_dir
+dir.create(file.path(output_dir), showWarnings = FALSE)
+```
+
+```{r user_params}
+############################################################
+# set global variables 
+############################################################
+padj_cutoff = 0.05
+species = "Homo sapiens"
+log2fc_cutoff_car = log2(1)
+minSize_gene_set=15
+method="fragments" #AUC or fragments
+dedup_status="dedup"
+scalesfbymean="Y"
+rawcountsprescaled="N"
+
+#http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H")
+
+# group to ignore
+ignore_groups=c()
+```
+
+```{r, include=FALSE}
+gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
+
+if (species=="Homo sapiens"){
+  genome="hg38"
+  txdb="TxDb.Hsapiens.UCSC.hg38.knownGene"
+} else if (species=="Mus Musculus"){
+  genome="mm10"
+}
+```
+
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+# package list
+list.of.packages=c("DESeq2","dplyr","ggplot2","ggrepel","ggpubr","tidyverse",
+                   "ggVennDiagram",txdb,"karyoploteR","RColorBrewer","EnhancedVolcano",
+                   "plotly","fgsea","msigdbr","gridExtra","kableExtra","clusterProfiler","UpSetR","ggupset","ggimage", "ChIPseeker")
+  
+#install as needed
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) BiocManager::install(new.packages)
+
+# source functions
+setwd(paste0(parent_dir,"sam/github"))
+source('CAR_secondary_functions.R')
+
+# load packages
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+#negate
+`%ni%` <- Negate(`%in%`)
+
+#anno
+if (species=="Homo sapiens"){
+  txdb<-TxDb.Hsapiens.UCSC.hg38.knownGene
+  annodb="org.Hs.eg.db"
+}
+```
+
+## **Data Processing**
+```{r contrast, include=FALSE,warning=FALSE, message=FALSE}
+####################
+# run metadata input
+####################
+#groups input
+groups_df1 = read.csv(paste0(input_car_dir1,"groups.tab"),sep="\t",header = FALSE)[,c("V1","V2")]
+colnames(groups_df1) = c("sampleid","group")
+rownames(groups_df1)=groups_df1$sampleid
+
+groups_df2 = read.csv(paste0(input_car_dir2,"groups.tab"),sep="\t",header = FALSE)[,c("V1","V2")]
+colnames(groups_df2) = c("sampleid","group")
+rownames(groups_df2)=groups_df2$sampleid
+```
+
+## **Data Analysis**  {.tabset}
+For each sample, all peaks are first annotated. Three summary graphics are then created:
+1. Pie chart of all annotation terms of ALL peaks
+2. Upset plot of all annotation terms of ALL peaks showing relationships of annotation terms
+3. Bar chart of the distribution of transcriptin factor binding loci by feature size
+
+Data was then filtered include only significant peaks. Three pie charts were then created:
+1. Pie chart of all annotation terms of SIGNIFICANT peaks
+2. Pie chart of all annotation terms INCREASED of SIGNIFICANT peaks
+3. Pie chart of all annotation terms DECREASED of SIGNIFICANT peaks
+
+Finally, two volcano plots were created.
+
+### 53_H3K4me3_vs_HN6_H3K4me3 {.tabset}
+
+#### SEACR
+```{r wo_s, warning=FALSE, echo=FALSE}
+#sample level 
+contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
+groups_df=groups_df1
+contrast_subpath=contrast_subpath1
+
+# peak tool
+norm_type_cutandrun="norm.relaxed" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
+extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
+
+#analysis
+peak_anno=main_prep_qc(contrast_id,exclusion_list)
+chipseeker_plots(peak_anno)
+merged_sig_df=create_sig_df(contrast_id)
+collapsed_df=create_collapsed_df(merged_sig_df)
+main_piecharts_from_collapsed(contrast_id)
+generate_volcano_plots(contrast_id)
+```
+
+#### MACS2
+```{r wo_m, warning=FALSE, echo=FALSE}
+# peak tool
+norm_type_cutandrun="narrowPeak" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
+extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun))
+
+#analysis
+peak_anno=main_prep_qc(contrast_id,exclusion_list)
+chipseeker_plots(peak_anno)
+merged_sig_df=create_sig_df(contrast_id)
+collapsed_df=create_collapsed_df(merged_sig_df)
+main_piecharts_from_collapsed(contrast_id)
+generate_volcano_plots(contrast_id)
+```
+
+### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb {.tabset}
+
+#### SEACR
+
+```{r w_s, warning=FALSE, echo=FALSE}
+#sample level 
+contrast_id=c("5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb")
+groups_df=groups_df2
+contrast_subpath=contrast_subpath2
+
+# peak tool
+norm_type_cutandrun="norm.relaxed" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
+extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
+
+#analysis
+peak_anno=main_prep_qc(contrast_id,exclusion_list)
+chipseeker_plots(peak_anno)
+merged_sig_df=create_sig_df(contrast_id)
+collapsed_df=create_collapsed_df(merged_sig_df)
+main_piecharts_from_collapsed(contrast_id)
+generate_volcano_plots(contrast_id)
+```
+
+#### MACS2
+```{r w_m, warning=FALSE, echo=FALSE}
+# peak tool
+norm_type_cutandrun="narrowPeak" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
+extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun))
+
+#analysis
+peak_anno=main_prep_qc(contrast_id,exclusion_list)
+chipseeker_plots(peak_anno)
+merged_sig_df=create_sig_df(contrast_id)
+collapsed_df=create_collapsed_df(merged_sig_df)
+main_piecharts_from_collapsed(contrast_id)
+generate_volcano_plots(contrast_id)
+```
