@@ -1,0 +1,48 @@
+
+
+
+
+```
+
+######################################################################
+## Question 6
+######################################################################
+##### 6) Generate volcano plot for H4K20me3 peaks and mark cell cycle and invasion/metastasis related genes (attached excel sheet) on this volcano plot
+
+```{r q6, echo=FALSE, warning=FALSE}
+sample_list=c("HN6_H4K20me3_vs_5-3_H4K20m3")
+for (contrast_id in sample_list){
+  generate_volcano_plots(contrast_id)
+}
+```
+
+######################################################################
+## Question 7
+######################################################################
+##### 7) Do we observe enrichment of H3K4me3, H4K20me3 in the promoters/gene body regions of cell cycle and/or invasion/metastasis genes (please use above datasets for interrogation) and how is this affected with SMYD3 knockdown?
+
+```{r q7, echo=FALSE, warning=FALSE}
+gene_id_list=c("REPRESSORS","ACCELERATORS")
+# for (gene_id in gene_id_list){
+#   generate_heatmaps_contrasts(subset(pi_df,gene_list==gene_id),
+#                      paste0(gene_id," Genes"))
+# }
+```
+
+######################################################################
+## Question 8
+######################################################################
+##### 8) Do we observe co-occupancy of promoters/gene body regions of cell cycle and/or invasion/metastasis genes for these histone marks? If so, how is this co-occupancy affected with SMYD3 knockdown?
+
+```{r q8, echo=FALSE, warning=FALSE}
+
+```
+
+######################################################################
+## Question 9
+######################################################################
+##### 9) Correlate any changes observed in the deposition of any of the above histone marks on the promoters/gene bodies of immune-related genes with expression changes of these immune-related genes using the RNA seq dataset as per below.
+
+```{r q9, echo=FALSE, warning=FALSE}
+
+```

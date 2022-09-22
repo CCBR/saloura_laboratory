@@ -1,0 +1,112 @@
+---
+title: "CCBR1155_Analysis"
+author: "Samantha Sevilla"
+date: "4/15/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+packages=c("dplyr","ggplot2","ggpubr","ComplexUpset","msigdbr","clusterProfiler","ggrepel","tidyverse")
+invisible(lapply(packages, library, character.only = TRUE))
+```
+
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+#paths
+parent_dir="~/../../Volumes/ccbr1155/CS030586_CARAP/results/peaks/contrasts/"
+out_dir = "~/../../Volumes/ccbr1155/CS030586_CARAP/results/peaks/contrasts/sam_pass2/ora_results"
+dir.create(file.path(out_dir), showWarnings = FALSE)
+
+#sample list
+sample_id=c("siSmyd3_2m_Smyd3_0.25HCHO_500K_vs_siNC_2m_Smyd3_0.25HCHO_500K",
+            "siSmyd3_5m_Smyd3_0.25HCHO_500K_vs_siNC_5m_Smyd3_0.25HCHO_500K")
+
+extensions=c("__dedup__norm.relaxed.bed")
+file_list=paste0(sample_id,extensions)
+file_list
+
+#set global variables 
+p_val_set = 0.05
+species = "mouse"
+log2fc_set = log(1.5,2)
+```
+
+```{r echo=FALSE}
+#read in results file, add to df
+method="fragments"
+merged_df=data.frame()
+for (sample_id in file_list){
+  # read in results and filter
+  # pvalue <0.05, log2FoldChange +- log2(1.5)
+  raw_df=read.csv(paste0(parent_dir,sample_id,"/",sample_id,"_",method,"based_diffresults.txt"),sep = "\t")
+  filt_df=subset(raw_df,pvalue<p_val_set)
+  filt_df=subset(filt_df,(log2FoldChange>=log2fc_set) | (log2FoldChange<=-log2fc_set))
+  
+  #add metadata
+  filt_df$sample=gsub("Smyd3_350K_0_35ng_0_25_HCHO_2m_","",strsplit(sample_id,"__")[[1]][1])
+  filt_df$dedup=strsplit(sample_id,"__")[[1]][2]
+  filt_df$type=strsplit(strsplit(sample_id,"__")[[1]][3],"[.]")[[1]][2]
+  filt_df$type=filt_df$type %>% replace(is.na(.),"narrowPeak")
+  filt_df$method=method
+  filt_df$total=nrow(filt_df)
+  filt_df$uniqueid=paste0(filt_df$sample,"_",filt_df$dedup,"_",filt_df$type)
+  
+  #merge dfs
+  merged_df=rbind(merged_df,filt_df)
+}
+
+# collapse to get shortAnno counts
+collapsed_df=merged_df %>% count(sample,shortAnno,dedup,type,method,total,uniqueid)
+
+#calculate percentages
+collapsed_df$perc=round((collapsed_df$n/collapsed_df$total)*100,2)
+
+# create samplename shorthands
+shorten_sample_id<-function(input_id){
+  output_id=gsub("_350K_0_35ng_0_25_HCHO_2m","",input_id)
+  output_id=gsub("_0.25HCHO_500K","",output_id)
+  output_id=gsub("MOC1_CRISPR_","",output_id)
+  output_id=gsub("_10","",output_id)
+  output_id=gsub("_2_Smyd3","",output_id)
+  output_id=gsub("Smyd3_v","v",output_id)
+  #output_id=strsplit(output_id,"__")[[1]][1]
+  return(output_id)
+}
+
+collapsed_df$sample_sub = shorten_sample_id(collapsed_df$sample)
+```
+
+######################################################################
+# Question #3/4: Overall distribution
+######################################################################
+
+```{r echo=FALSE, warning=FALSE}
+# create pie chart for each comparison
+for (sample_id in unique(collapsed_df$uniqueid)){
+  # subset for sample
+  sub_df=subset(collapsed_df,uniqueid==sample_id)
+  
+  # get positions
+  df2 <- sub_df %>% 
+  mutate(csum = rev(cumsum(rev(n))), 
+         pos = n/2 + lead(csum, 1),
+         pos = if_else(is.na(pos), n/2, pos))
+
+  p = ggplot(sub_df, aes(x = "" , y = n, fill = fct_inorder(shortAnno))) +
+    geom_col(width = 1, color = 1) +
+    coord_polar(theta = "y") +
+    scale_fill_brewer(palette = "Pastel1") +
+    geom_label_repel(data = df2,
+                     aes(y = pos, label = paste0(perc, "%")),
+                     size = 4.5, nudge_x = 1, show.legend = FALSE) +
+    guides(fill = guide_legend(title = "Group")) +
+    ggtitle(paste0("Significant peaks by type for: ",unique(sub_df$sample_sub))) +
+    theme_void()
+  print(p)
+}
+
+
+```
+
+
