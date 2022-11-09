@@ -6,6 +6,20 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+
+## Project info
+This analysis report comparison two projects
+
+| CS ID | Type | Species | CCBR | Notes | 
+| -- | -- | -- | -- | -- |
+| CS031014 | Cut and Run | Hg38 | 1155 |  |
+| CS028891 | RNA Seq | Hg38 | 1155 |  |
+
+## Links
+- [CS031014](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chrX%3A15560138%2D15602945&hgsid=138042_bQaCEQ730iKs2v633AtElgyIVxFO)
+
+- [CS028891](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chr1%3A228424845%2D228425360&hgsid=138045_YaxblMavQd49PFnKV3dfLnT9Icne)
+
 ```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
 ############################################################
 # project information
@@ -29,7 +43,7 @@ dir.create(file.path(output_dir), showWarnings = FALSE)
 ############################################################
 padj_cutoff = 0.05
 species = "Homo sapiens"
-log2fc_cutoff_car = 1
+log2fc_cutoff=0.3785 #FC of 1.3
 log2fc_cutoff_rna = 1.3
 minSize_gene_set=15
 
@@ -39,8 +53,13 @@ db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","
 # group to ignore
 ignore_groups=c()
 
-# gene list
-gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
+## pull apm/alpha genes
+gene_file = paste0(parent_dir,"docs/apm_alpha_genelist.csv")
+pi_gene_df = read.csv(gene_file)
+
+# pull cell cycle genes
+gene_file = paste0(parent_dir,"docs/apm_alpha_genelist.csv")
+pi_gene_df2 = read.csv(gene_file)
 
 # dbs
 if (species=="Homo sapiens"){
@@ -62,7 +81,7 @@ new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"
 if(length(new.packages)) BiocManager::install(new.packages)
 
 # source functions
-source('CAR_and_RNASeq_core_functions.R')
+source('CAR_functions.R')
 
 # load packages
 invisible(lapply(list.of.packages, library, character.only = TRUE))
@@ -94,7 +113,7 @@ The genomic region of the peak is reported in annotation column using [ChIPseeke
 ```{r q1, warning=FALSE, echo=FALSE}
 # run function
 contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
-main_piecharts_from_collapsed(contrast_id)
+main_piecharts_from_collapsed_secondary(contrast_id)
 ```
 
 ### Question 2A {.tabset}
@@ -150,28 +169,28 @@ analysis_type="GSEA"
 #### All genes
 ```{r q2bg_all, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="all" #all, promoter, intron etc
-#main_gsea_ora_function(subset_type=subset_type,
- #                      sig_type=sig_type,
-  #                     db_list=db_list,
-   #                    analysis_type=analysis_type)   
+main_gsea_ora_function(subset_type=subset_type,
+                       sig_type=sig_type,
+                       db_list=db_list,
+                       analysis_type=analysis_type)   
 ```
 
 #### Promoter genes
 ```{r q2bg_p, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="Promoter"
-#main_gsea_ora_function(subset_type=subset_type,
- #                      sig_type=sig_type,
-  #                     db_list=db_list,
-   #                    analysis_type=analysis_type)  
+main_gsea_ora_function(subset_type=subset_type,
+                       sig_type=sig_type,
+                       db_list=db_list,
+                       analysis_type=analysis_type)   
 ```
 
 #### Intron genes
 ```{r q2bg_i, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="Intron"
-#main_gsea_ora_function(subset_type=subset_type,
- #                      sig_type=sig_type,
-  #                     db_list=db_list,
-   #                    analysis_type=analysis_type)  
+main_gsea_ora_function(subset_type=subset_type,
+                       sig_type=sig_type,
+                       db_list=db_list,
+                       analysis_type=analysis_type)   
 ```
 
 ### Question 2B (O) {.tabset}
@@ -193,28 +212,28 @@ analysis_type="ORA"
 #### All genes
 ```{r q2bo_all, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="all" #all, promoter, intron etc
-#main_gsea_ora_function(subset_type=subset_type,
- #                      sig_type=sig_type,
-  #                     db_list=db_list,
-   #                    analysis_type=analysis_type)  
+main_gsea_ora_function(subset_type=subset_type,
+                       sig_type=sig_type,
+                       db_list=db_list,
+                       analysis_type=analysis_type)  
 ```
 
 #### Promoter genes
 ```{r q2bo_p, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="Promoter"
-#main_gsea_ora_function(subset_type=subset_type,
- #                      sig_type=sig_type,
-  #                     db_list=db_list,
-   #                    analysis_type=analysis_type)  
+main_gsea_ora_function(subset_type=subset_type,
+                       sig_type=sig_type,
+                       db_list=db_list,
+                       analysis_type=analysis_type)  
 ```
 
 #### Intron genes
 ```{r q2bo_i, warning=FALSE, echo=FALSE, message=FALSE}
 subset_type="Intron"
-#main_gsea_ora_function(subset_type=subset_type,
- #                      sig_type=sig_type,
-  #                     db_list=db_list,
-   #                    analysis_type=analysis_type)   
+main_gsea_ora_function(subset_type=subset_type,
+                       sig_type=sig_type,
+                       db_list=db_list,
+                       analysis_type=analysis_type)    
 ```
 
 ### Question 3
@@ -224,7 +243,7 @@ Negative log2 fold change in these plots corresponds with a decrease in the trea
 
 ```{r q3, warning=FALSE, echo=FALSE, message=FALSE}
 contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
-generate_volcano_plots(contrast_id)
+generate_volcano_plots(contrast_id,gene_list_in="ON")
 ```
 
 
@@ -233,7 +252,7 @@ generate_volcano_plots(contrast_id)
 
 ```{r q4, echo=FALSE, warning=FALSE, message=FALSE}
 contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
-main_piecharts_from_collapsed(contrast_id)
+main_piecharts_from_collapsed_secondary(contrast_id)
 ```
 
 ### Question 5A {.tabset}
@@ -363,7 +382,7 @@ main_gsea_ora_function(subset_type=subset_type,
 
 ```{r q6, warning=FALSE, echo=FALSE, message=FALSE}
 contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
-generate_volcano_plots(contrast_id)
+generate_volcano_plots(contrast_id,gene_list_in="ON")
 ```
 
 ### Question 7
@@ -371,13 +390,8 @@ generate_volcano_plots(contrast_id)
 
 ```{r q7im, warning=FALSE, echo=FALSE, message=FALSE}
 contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
-gene_list_select=subset(gene_list,Set %in% c("REPRESSORS","ACCELERATORS"))$Human
-gene_list_title="Repressors/Accelarators"
-generate_volcano_plots(contrast_id, gene_list_select, gene_list_title)
-
-gene_list_select=subset(gene_list,Set %in% c("INVASION"))$Human
-gene_list_title="Invadors"
-generate_volcano_plots(contrast_id, gene_list_select, gene_list_title)
+pi_gene_df=pi_gene_df2
+generate_volcano_plots(contrast_id,gene_list_in="ON")
 ```
 
 ### Question 8
