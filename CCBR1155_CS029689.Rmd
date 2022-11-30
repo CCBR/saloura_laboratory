@@ -6,6 +6,15 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+## Project info
+
+| CS ID | Type | Species | CCBR | Notes | 
+| -- | -- | -- | -- | -- |
+| CS029689 | Cut and Run | Hg38 | 1155 | this includes INFB |
+
+## Links
+- [CS029689](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chrX%3A15560138%2D15602945&hgsid=138044_F8trGjLAIsZ8fDb3lBslAIdLOr8E)
+
 
 ```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
 ############################################################
@@ -14,18 +23,18 @@ editor_options:
 #paths
 parent_dir="~/../../Volumes/ccbr1155/"
 input_dir = "~/../../Volumes/ccbr1155/CS029689/"
-output_dir = "~/../../Volumes/ccbr1155/CS029689/r_analysis_220920/"
-contrast_subpath=paste0(input_dir,"carlisle_220920/results/peaks/contrasts/")
-dir.create(file.path(output_dir), showWarnings = FALSE)
+output_car_dir = "~/../../Volumes/ccbr1155/CS029689/r_analysis_220920/"
+car_subpath=paste0(input_dir,"carlisle_220920/results/peaks/contrasts/")
+dir.create(file.path(output_car_dir), showWarnings = FALSE)
 ```
 
 ```{r user_params}
 ############################################################
 # set global variables 
 ############################################################
-p_val_set = 0.05
+padj_cutoff = 0.05
 species = "Homo Sapiens"
-log2fc_cutoff=abs(log2(.3))
+log2fc_cutoff_car=1
 method="fragments" #AUC or fragments
 dedup_status="dedup"
 norm_type_cutandrun="norm.relaxed"
@@ -53,7 +62,7 @@ new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"
 if(length(new.packages)) BiocManager::install(new.packages)
 
 # source functions
-source('CAR_core_functions.R')
+source('CAR_functions.R')
 
 # load packages
 invisible(lapply(list.of.packages, library, character.only = TRUE))
@@ -79,8 +88,11 @@ colnames(groups_df) = c("sampleid","group")
 rownames(groups_df)=groups_df$sampleid
 
 ## if there is a subset gene list, select files
-gene_file = paste0(parent_dir,"docs/merged_gene_list_v2.csv")
+gene_file = paste0(parent_dir,"docs/apm_alpha_genelist.csv")
 pi_gene_df = read.csv(gene_file)
+
+gene_file = paste0(parent_dir,"docs/merged_gene_list_v2.csv")
+gene_list = read.csv(gene_file)
 
 # read in the contrast list
 contrast_df=read.csv(paste0(input_dir,"contrasts.tsv"),sep="\t")
@@ -107,29 +119,28 @@ Raw counts are read in and filtered by counts per million reads (CPM). Filtering
 
 Reviewing sample QC allows us to determine if there are outliers present in analysis and the success of data normalization. If there are, samples are removed in the "Selected Samples Normalized" plots.
 
-## Quality Control  {.tabset}
+### Normalization {.tabset}
 
 #### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb
-```{r qc1, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
+
+```{r qc1, echo=FALSE, warning=FALSE, message=FALSE}
 exclusion_list=c()
 contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb"
-peak_anno_4 = main_prep_qc(contrast_id,exclusion_list)
+peak_anno_4=main_prep_qc_core(contrast_id,exclusion_list)
 ```
 
 #### 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb
-```{r qc2, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
+
+```{r qc2, echo=FALSE, warning=FALSE, message=FALSE}
 exclusion_list=c()
 contrast_id="5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb"
-peak_anno_9 = main_prep_qc(contrast_id,exclusion_list)
+peak_anno_20=main_prep_qc_core(contrast_id,exclusion_list)
 ```
 
 ## **Data Processing**
 Reviewing counts of significant peaks guides analysis parameters downstream.
 
-```{r collapsedf, echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
-#read gene list
-gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
-
+```{r collapsedf, echo=FALSE, warning=FALSE, message=FALSE}
 # create significant gene lists
 contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb"
 merged_sig_df=create_sig_df(contrast_id)
@@ -143,18 +154,38 @@ collapsed_df=create_collapsed_df(merged_sig_df)
 collapsed_pi_df=create_collapsed_pi_df(merged_sig_df)
 ```
 
-
 Review summary annotation for all peaks.
 
-### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb
+### Summary {.tabset}
 
-```{r graphics1,echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
+#### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb
+
+```{r graphics1,echo=FALSE, warning=FALSE, message=FALSE}
 chipseeker_plots(peak_anno_4)
 ```
 
-### 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb
+#### 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb
 
-```{r graphics2,echo=FALSE, warning=FALSE,warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_9)
+```{r graphics2,echo=FALSE, warning=FALSE, message=FALSE}
+chipseeker_plots(peak_anno_20)
 ```
 
+### Volcano plots {.tabset}
+
+Negative log2 fold change in these plots corresponds with a decrease in the treatment, and a positive log2 fold change corresponds with an increase in the treatment.
+
+#### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb
+
+```{r v1, warning=FALSE, echo=FALSE, message=FALSE}
+contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb"
+generate_volcano_plots(contrast_id,gene_list_in="on")
+DT::datatable(read.csv(paste0(output_car_dir,"volcano_data_",contrast_id,".csv")))
+```
+
+#### 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb
+
+```{r v2, warning=FALSE, echo=FALSE, message=FALSE}
+contrast_id="5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb"
+generate_volcano_plots(contrast_id,gene_list_in="on")
+DT::datatable(read.csv(paste0(output_car_dir,"volcano_data_",contrast_id,".csv")))
+```

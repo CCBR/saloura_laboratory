@@ -4,9 +4,9 @@
 module load samtools bedtools ucsc
 reference="hg38"
 frag_length_filter="1000"
-output_dir="/data/CCBR/projects/ccbr1155/CS028891/bigwig"
-pipeliner_dir="/data/CCBR/projects/ccbr1155/CS028891/pipeliner_220713"
-project_id="CS028891"
+project_id="CS029689"
+output_dir="/data/CCBR/projects/ccbr1155/$project_id/bigwig"
+pipeliner_dir="/data/CCBR/projects/ccbr1155/$project_id/pipeliner_220919"
 
 track_dir="/data/CCBR/datashare/ccbr1155/${project_id}/bigwig"
 track_info="$output_dir/track_info.txt"
@@ -27,6 +27,7 @@ fi
 # create the length file if it doesnt exist
 ref_length="$output_dir/ref_length"
 if [[ ! -f $ref_length ]]; then
+    echo "--creating ref length files"
     ln -s $fa $output_dir/$reference.fa
     samtools faidx $output_dir/$reference.fa
     cut -f1,2 $output_dir/$reference.fa.fai > $ref_length
@@ -35,8 +36,7 @@ else
 fi
 
 # create bigwig files, track files
-sample_list=("CRISPR_52_without_IFNb_1" "CRISPR_52_without_IFNb_2" "CRISPR_52_without_IFNb_3" "CRISPR_53_without_IFNb_1" "CRISPR_53_without_IFNb_2" "CRISPR_53_without_IFNb_3"
-"parental_HN6_without_IFNb_1" "parental_HN6_without_IFNb_2" "parental_HN6_without_IFNb_3")
+sample_list=("5-3_H3K4me3_IFNb_1" "5-3_H3K4me3_IFNb_2" "5-3_H3K4me3_IFNb_3" "5-3_H3K9me3_IFNb_1""5-3_H3K9me3_IFNb_2" "5-3_H3K9me3_IFNb_3" "HN6_H3K4me3_IFNb_1" "HN6_H3K4me3_IFNb_2" "HN6_H3K4me3_IFNb_3" "HN6_H3K9me3_IFNb_1" "HN6_H3K9me3_IFNb_2" "HN6_H3K9me3_IFNb_3" "HN6_IgG_rabbit_negative_control_1")
 for sample_id in ${sample_list[@]}; do
     echo "--$sample_id"
     #input_bam="$pipeliner_dir/bams/$sample_id.p2.Aligned.toTranscriptome.out.bam"
@@ -97,7 +97,7 @@ for sample_id in ${sample_list[@]}; do
 done
 
 # change permissions
-chmod -R 777 /data/CCBR/datashare/ccbr1155/CS028891/
+chmod -R 777 /data/CCBR/datashare/ccbr1155/$project_id/
 
 # cat track info
 cat $track_info

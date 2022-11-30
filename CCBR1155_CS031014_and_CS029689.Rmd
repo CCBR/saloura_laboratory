@@ -6,19 +6,33 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+
+## Project info
+This analysis report comparison two peak calling methods. [SEACR](https://github.com/FredHutch/SEACR) which includes the "normal.relaxed" peak threhold and [MACS2](https://hbctraining.github.io/Intro-to-ChIPseq/lessons/05_peak_calling_macs.html) which includes the "narrowPeak" threshold.
+
+| CS ID | Type | Species | CCBR | Notes | 
+| -- | -- | -- | -- | -- |
+| CS031014 | Cut and Run | Hg38 | 1155 | this does not include INFB |
+| CS029689 | Cut and Run | Hg38 | 1155 | this includes INFB |
+
+## Links
+- [CS031014](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chrX%3A15560138%2D15602945&hgsid=138042_bQaCEQ730iKs2v633AtElgyIVxFO)
+
+- [CS029689](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chrX%3A15560138%2D15602945&hgsid=138044_F8trGjLAIsZ8fDb3lBslAIdLOr8E)
+
 ```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
 ############################################################
 # project information
 ############################################################
 #paths
-parent_dir="~/../../Volumes/ccbr1155/"
-input_car_dir1 = "~/../../Volumes/ccbr1155/CS031014/"
-contrast_subpath1=paste0(input_car_dir1,"/carlisle_220919/results/peaks/contrasts/")
+parent_dir="~/../../Volumes/ccbr1155-1/"
+input_car_dir1 = "~/../../Volumes/ccbr1155-1/CS031014/"
+contrast_subpath1=paste0(input_car_dir1,"/carlisle_220920/results/peaks/contrasts/")
 
-input_car_dir2 = "~/../../Volumes/ccbr1155/CS029689/"
-contrast_subpath2=paste0(input_car_dir2,"/carlisle_220919/results/peaks/contrasts/")
+input_car_dir2 = "~/../../Volumes/ccbr1155-1/CS029689/"
+contrast_subpath2=paste0(input_car_dir2,"/carlisle_220920/results/peaks/contrasts/")
 
-output_dir = "~/../../Volumes/ccbr1155/CS031014_CS029689/r_analysis_220919/"
+output_dir = "~/../../Volumes/ccbr1155-1/CS031014_CS029689/r_analysis_220919/"
 output_car_dir=output_dir
 dir.create(file.path(output_dir), showWarnings = FALSE)
 ```
@@ -29,7 +43,7 @@ dir.create(file.path(output_dir), showWarnings = FALSE)
 ############################################################
 padj_cutoff = 0.05
 species = "Homo sapiens"
-log2fc_cutoff_car = log2(1)
+log2fc_cutoff_car = 1
 minSize_gene_set=15
 method="fragments" #AUC or fragments
 dedup_status="dedup"
@@ -44,7 +58,9 @@ ignore_groups=c()
 ```
 
 ```{r, include=FALSE}
-gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
+## if there is a subset gene list, select files
+gene_file = paste0(parent_dir,"docs/apm_alpha_genelist.csv")
+pi_gene_df = read.csv(gene_file)
 
 if (species=="Homo sapiens"){
   genome="hg38"
@@ -58,15 +74,15 @@ if (species=="Homo sapiens"){
 # package list
 list.of.packages=c("DESeq2","dplyr","ggplot2","ggrepel","ggpubr","tidyverse",
                    "ggVennDiagram",txdb,"karyoploteR","RColorBrewer","EnhancedVolcano",
-                   "plotly","fgsea","msigdbr","gridExtra","kableExtra","clusterProfiler","UpSetR","ggupset","ggimage", "ChIPseeker")
+                   "plotly","fgsea","msigdbr","gridExtra","kableExtra","clusterProfiler","UpSetR","ggupset",
+                   "ggimage", "ChIPseeker","pander")
   
 #install as needed
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) BiocManager::install(new.packages)
 
 # source functions
-setwd(paste0(parent_dir,"sam/github"))
-source('CAR_secondary_functions.R')
+source('CAR_functions.R')
 
 # load packages
 invisible(lapply(list.of.packages, library, character.only = TRUE))
@@ -79,6 +95,7 @@ if (species=="Homo sapiens"){
   txdb<-TxDb.Hsapiens.UCSC.hg38.knownGene
   annodb="org.Hs.eg.db"
 }
+options(ChIPseeker.downstreamDistance = 0)
 ```
 
 ## **Data Processing**
@@ -98,88 +115,284 @@ rownames(groups_df2)=groups_df2$sampleid
 
 ## **Data Analysis**  {.tabset}
 For each sample, all peaks are first annotated. Three summary graphics are then created:
+
 1. Pie chart of all annotation terms of ALL peaks
+
 2. Upset plot of all annotation terms of ALL peaks showing relationships of annotation terms
+
 3. Bar chart of the distribution of transcriptin factor binding loci by feature size
 
 Data was then filtered include only significant peaks. Three pie charts were then created:
+
 1. Pie chart of all annotation terms of SIGNIFICANT peaks
+
 2. Pie chart of all annotation terms INCREASED of SIGNIFICANT peaks
+
 3. Pie chart of all annotation terms DECREASED of SIGNIFICANT peaks
 
 Finally, two volcano plots were created.
 
 ### 53_H3K4me3_vs_HN6_H3K4me3 {.tabset}
 
-#### SEACR
-```{r wo_s, warning=FALSE, echo=FALSE}
+#### SEACR {.tabset}
+```{r wo_s, warning=FALSE, echo=FALSE, message=FALSE}
 #sample level 
 contrast_id=c("53_H3K4me3_vs_HN6_H3K4me3")
 groups_df=groups_df1
-contrast_subpath=contrast_subpath1
+car_subpath=contrast_subpath1
 
 # peak tool
 norm_type_cutandrun="norm.relaxed" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
 extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
-
-#analysis
-peak_anno=main_prep_qc(contrast_id,exclusion_list)
-chipseeker_plots(peak_anno)
-merged_sig_df=create_sig_df(contrast_id)
-collapsed_df=create_collapsed_df(merged_sig_df)
-main_piecharts_from_collapsed(contrast_id)
-generate_volcano_plots(contrast_id)
 ```
 
-#### MACS2
-```{r wo_m, warning=FALSE, echo=FALSE}
+##### Summary
+```{r wo_ss, warning=FALSE, echo=FALSE, message=FALSE}
+#analysis
+peak_anno=main_prep_qc_secondary(contrast_id,exclusion_list)
+chipseeker_plots(peak_anno)
+```
+
+##### Pie Charts
+```{r wo_sp, warning=FALSE, echo=FALSE, message=FALSE}
+merged_sig_df=create_sig_df(contrast_id)
+merged_sig_df$peaktype="SEACR"
+promoter_df=subset(merged_sig_df,shortAnno=="Promoter")
+collapsed_df=create_collapsed_df(merged_sig_df)
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+##### Volcano
+```{r wo_sv, warning=FALSE, echo=FALSE, message=FALSE}
+generate_volcano_plots(contrast_id,gene_list_in = "ON")
+DT::datatable(read.csv(paste0(output_car_dir,"volcano_data_",contrast_id,".csv")))
+```
+
+#### MACS2 {.tabset}
+```{r wo_m, warning=FALSE, echo=FALSE, message=FALSE}
 # peak tool
 norm_type_cutandrun="narrowPeak" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
 extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun))
+```
 
+##### Summary
+```{r wo_ms, warning=FALSE, echo=FALSE, message=FALSE}
 #analysis
-peak_anno=main_prep_qc(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_secondary(contrast_id,exclusion_list)
 chipseeker_plots(peak_anno)
+```
+
+##### Pie Charts
+```{r wo_mp, warning=FALSE, echo=FALSE, message=FALSE}
 merged_sig_df=create_sig_df(contrast_id)
+merged_sig_df$peaktype="MACS2"
+promoter_df=rbind(promoter_df,
+                  subset(merged_sig_df,shortAnno=="Promoter"))
 collapsed_df=create_collapsed_df(merged_sig_df)
-main_piecharts_from_collapsed(contrast_id)
-generate_volcano_plots(contrast_id)
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+##### Volcano
+```{r wo_mv, warning=FALSE, echo=FALSE, message=FALSE}
+generate_volcano_plots(contrast_id,gene_list_in = "ON")
+DT::datatable(read.csv(paste0(output_car_dir,"volcano_data_",contrast_id,".csv")))
+```
+
+#### Overlap 
+Reviewing the overlapping genes between promoters, and those that are unique to either
+MACS2 or SECAR.
+```{r o1, warning=FALSE, echo=FALSE, message=FALSE}
+gene_seacr=unique(subset(promoter_df,peaktype=="SEACR")$SYMBOL)
+gene_macs2=unique(subset(promoter_df,peaktype=="MACS2")$SYMBOL)
+
+print(paste0("The total number of genes identified in SEACR: ",length(gene_seacr)))
+print(paste0("The total number of genes identified in MACS2: ",length(gene_macs2)))
+
+overlap_list=gene_seacr[gene_seacr %in% gene_macs2]
+overlap_list=unique(append(gene_macs2[gene_macs2 %in% gene_seacr],overlap_list))
+print(paste0("The genes in common (",length(overlap_list),")"))
+print(overlap_list)
+
+print(paste0("The genes in SEACR only (",length(gene_seacr[gene_seacr %ni% gene_macs2]),")"))
+gene_seacr[gene_seacr %ni% gene_macs2]
+
+print(paste0("The genes in MACS2 only (",length(gene_macs2[gene_macs2 %ni% gene_seacr]),")"))
+gene_macs2[gene_macs2 %ni% gene_seacr]
+```
+
+### 53_H4K20m3_vs_HN6_H4K20me3 {.tabset}
+
+#### SEACR {.tabset}
+```{r wo_s, warning=FALSE, echo=FALSE, message=FALSE}
+#sample level 
+contrast_id=c("53_H4K20m3_vs_HN6_H4K20me3")
+groups_df=groups_df1
+car_subpath=contrast_subpath1
+
+# peak tool
+norm_type_cutandrun="norm.relaxed" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
+extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
+```
+
+##### Summary
+```{r wo_ss, warning=FALSE, echo=FALSE, message=FALSE}
+#analysis
+peak_anno=main_prep_qc_secondary(contrast_id,exclusion_list)
+chipseeker_plots(peak_anno)
+```
+
+##### Pie Charts
+```{r wo_sp, warning=FALSE, echo=FALSE, message=FALSE}
+merged_sig_df=create_sig_df(contrast_id)
+merged_sig_df$peaktype="SEACR"
+promoter_df=subset(merged_sig_df,shortAnno=="Promoter")
+collapsed_df=create_collapsed_df(merged_sig_df)
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+##### Volcano
+```{r wo_sv, warning=FALSE, echo=FALSE, message=FALSE}
+generate_volcano_plots(contrast_id,gene_list_in = "ON")
+DT::datatable(read.csv(paste0(output_car_dir,"volcano_data_",contrast_id,".csv")))
+```
+
+#### MACS2 {.tabset}
+```{r wo_m, warning=FALSE, echo=FALSE, message=FALSE}
+# peak tool
+norm_type_cutandrun="narrowPeak" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
+extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun))
+```
+
+##### Summary
+```{r wo_ms, warning=FALSE, echo=FALSE, message=FALSE}
+#analysis
+peak_anno=main_prep_qc_secondary(contrast_id,exclusion_list)
+chipseeker_plots(peak_anno)
+```
+
+##### Pie Charts
+```{r wo_mp, warning=FALSE, echo=FALSE, message=FALSE}
+merged_sig_df=create_sig_df(contrast_id)
+merged_sig_df$peaktype="MACS2"
+promoter_df=rbind(promoter_df,
+                  subset(merged_sig_df,shortAnno=="Promoter"))
+collapsed_df=create_collapsed_df(merged_sig_df)
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+##### Volcano
+```{r wo_mv, warning=FALSE, echo=FALSE, message=FALSE}
+generate_volcano_plots(contrast_id,gene_list_in = "ON")
+DT::datatable(read.csv(paste0(output_car_dir,"volcano_data_",contrast_id,".csv")))
+```
+
+#### Overlap 
+Reviewing the overlapping genes between promoters, and those that are unique to either
+MACS2 or SECAR.
+```{r o1, warning=FALSE, echo=FALSE, message=FALSE}
+gene_seacr=unique(subset(promoter_df,peaktype=="SEACR")$SYMBOL)
+gene_macs2=unique(subset(promoter_df,peaktype=="MACS2")$SYMBOL)
+
+print(paste0("The total number of genes identified in SEACR: ",length(gene_seacr)))
+print(paste0("The total number of genes identified in MACS2: ",length(gene_macs2)))
+
+overlap_list=gene_seacr[gene_seacr %in% gene_macs2]
+overlap_list=unique(append(gene_macs2[gene_macs2 %in% gene_seacr],overlap_list))
+print(paste0("The genes in common (",length(overlap_list),")"))
+print(overlap_list)
+
+print(paste0("The genes in SEACR only (",length(gene_seacr[gene_seacr %ni% gene_macs2]),")"))
+gene_seacr[gene_seacr %ni% gene_macs2]
+
+print(paste0("The genes in MACS2 only (",length(gene_macs2[gene_macs2 %ni% gene_seacr]),")"))
+gene_macs2[gene_macs2 %ni% gene_seacr]
 ```
 
 ### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb {.tabset}
 
-#### SEACR
+#### SEACR {.tabset}
 
-```{r w_s, warning=FALSE, echo=FALSE}
+```{r w_s, warning=FALSE, echo=FALSE, message=FALSE}
 #sample level 
 contrast_id=c("5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb")
 groups_df=groups_df2
-contrast_subpath=contrast_subpath2
+car_subpath=contrast_subpath2
 
 # peak tool
 norm_type_cutandrun="norm.relaxed" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
 extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
-
-#analysis
-peak_anno=main_prep_qc(contrast_id,exclusion_list)
-chipseeker_plots(peak_anno)
-merged_sig_df=create_sig_df(contrast_id)
-collapsed_df=create_collapsed_df(merged_sig_df)
-main_piecharts_from_collapsed(contrast_id)
-generate_volcano_plots(contrast_id)
 ```
 
-#### MACS2
-```{r w_m, warning=FALSE, echo=FALSE}
+##### Summary
+```{r w_ss, warning=FALSE, echo=FALSE, message=FALSE}
+#analysis
+peak_anno=main_prep_qc_secondary(contrast_id,exclusion_list)
+chipseeker_plots(peak_anno)
+```
+
+##### Pie Charts
+```{r w_sp, warning=FALSE, echo=FALSE, message=FALSE}
+merged_sig_df=create_sig_df(contrast_id)
+merged_sig_df$peaktype="SEACR"
+promoter_df=subset(merged_sig_df,shortAnno=="Promoter")
+collapsed_df=create_collapsed_df(merged_sig_df)
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+##### Volcano
+```{r w_sv, warning=FALSE, echo=FALSE, message=FALSE}
+generate_volcano_plots(contrast_id,gene_list_in = "ON")
+DT::datatable(read.csv(paste0(output_car_dir,"volcano_data_",contrast_id,".csv")))
+```
+
+#### MACS2 {.tabset}
+```{r w_m, warning=FALSE, echo=FALSE, message=FALSE}
 # peak tool
 norm_type_cutandrun="narrowPeak" # set analysis type (norm.relaxed=SEACR, narrowPeak=MACS2)
 extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun))
+```
 
+##### Summary
+```{r w_ms, warning=FALSE, echo=FALSE, message=FALSE}
 #analysis
-peak_anno=main_prep_qc(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_secondary(contrast_id,exclusion_list)
 chipseeker_plots(peak_anno)
+```
+
+##### Pie Charts
+```{r w_mp, warning=FALSE, echo=FALSE, message=FALSE}
 merged_sig_df=create_sig_df(contrast_id)
+merged_sig_df$peaktype="MACS2"
+promoter_df=rbind(promoter_df,
+                  subset(merged_sig_df,shortAnno=="Promoter"))
 collapsed_df=create_collapsed_df(merged_sig_df)
-main_piecharts_from_collapsed(contrast_id)
-generate_volcano_plots(contrast_id)
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+##### Volcano
+```{r w_mv, warning=FALSE, echo=FALSE, message=FALSE}
+generate_volcano_plots(contrast_id,gene_list_in = "ON")
+DT::datatable(read.csv(paste0(output_car_dir,"volcano_data_",contrast_id,".csv")))
+```
+
+#### Overlap 
+Reviewing the overlapping genes between promoters, and those that are unique to either
+MACS2 or SECAR.
+```{r o2, warning=FALSE, echo=FALSE, message=FALSE}
+gene_seacr=unique(subset(promoter_df,peaktype=="SEACR")$SYMBOL)
+gene_macs2=unique(subset(promoter_df,peaktype=="MACS2")$SYMBOL)
+
+print(paste0("The total number of genes identified in SEACR: ",length(gene_seacr)))
+print(paste0("The total number of genes identified in MACS2: ",length(gene_macs2)))
+
+overlap_list=gene_seacr[gene_seacr %in% gene_macs2]
+overlap_list=unique(append(gene_macs2[gene_macs2 %in% gene_seacr],overlap_list))
+print(paste0("The genes in common (",length(overlap_list),")"))
+print(overlap_list)
+
+print(paste0("The genes in SEACR only (",length(gene_seacr[gene_seacr %ni% gene_macs2]),")"))
+gene_seacr[gene_seacr %ni% gene_macs2]
+
+print(paste0("The genes in MACS2 only (",length(gene_macs2[gene_macs2 %ni% gene_seacr]),")"))
+gene_macs2[gene_macs2 %ni% gene_seacr]
 ```

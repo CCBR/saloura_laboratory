@@ -6,6 +6,15 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+## Project info
+This analysis report comparison two projects
+
+| CS ID | Type | Species | CCBR | Notes | 
+| -- | -- | -- | -- | -- |
+| CS031014 | Cut and Run | Hg38 | 1155 |  |
+
+## Links
+- [CS031014](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chrX%3A15560138%2D15602945&hgsid=138042_bQaCEQ730iKs2v633AtElgyIVxFO)
 
 ```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
 ############################################################
@@ -14,21 +23,21 @@ editor_options:
 #paths
 parent_dir="~/../../Volumes/ccbr1155/"
 input_dir = "~/../../Volumes/ccbr1155/CS031014/"
-output_dir = "~/../../Volumes/ccbr1155/CS031014/r_analysis_220823/"
-contrast_subpath=paste0(input_dir,"carlisle_220920/results/peaks/contrasts/")
-dir.create(file.path(output_dir), showWarnings = FALSE)
+output_car_dir = "~/../../Volumes/ccbr1155/CS031014/r_analysis_221123/"
+car_subpath=paste0(input_dir,"carlisle_220920/results/peaks/contrasts/")
+dir.create(file.path(output_car_dir), showWarnings = FALSE)
+cs_id="CS031014"
 ```
 
 ```{r user_params}
 ############################################################
 # set global variables 
 ############################################################
-p_val_set = 0.05
+padj_cutoff = 0.05
 species = "Homo Sapiens"
-log2fc_cutoff=abs(log2(.3))
+log2fc_cutoff_car=0.3785 #FC of 1.3
 method="fragments" #AUC or fragments
 dedup_status="dedup"
-norm_type_cutandrun="norm.relaxed"
 scalesfbymean="Y"
 rawcountsprescaled="N"
 
@@ -40,8 +49,6 @@ if (species=="Homo Sapiens"){
 # group to ignore
 ignore_groups=c()
 
-# extension name
-extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
 ```
 
 ```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
@@ -113,14 +120,18 @@ Reviewing sample QC allows us to determine if there are outliers present in anal
 ```{r qc1, echo=FALSE, warning=FALSE, message=FALSE}
 exclusion_list=c()
 contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
-peak_anno_4=main_prep_qc(contrast_id,exclusion_list)
+norm_type_cutandrun="narrowGo_peaks"
+
+peak_anno_4=main_prep_qc_core(contrast_id,exclusion_list)
 ```
 
 #### 53_H4K20m3_vs_HN6_H4K20me3
 ```{r qc2, echo=FALSE, warning=FALSE, message=FALSE}
 exclusion_list=c()
 contrast_id="53_H4K20m3_vs_HN6_H4K20me3"
-peak_anno_20=main_prep_qc(contrast_id,exclusion_list)
+norm_type_cutandrun="broadGo_peaks"
+
+peak_anno_20=main_prep_qc_core(contrast_id,exclusion_list)
 ```
 
 ## **Data Processing**
@@ -132,10 +143,12 @@ gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
 
 # create significant gene lists
 contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
+norm_type_cutandrun="narrowGo_peaks"
 merged_sig_df=create_sig_df(contrast_id)
 
 contrast_id="53_H4K20m3_vs_HN6_H4K20me3"
-merged_sig_df=full_join(merged_sig_df,
+norm_type_cutandrun="broadGo_peaks"
+merged_sig_df=rbind(merged_sig_df,
                         create_sig_df(contrast_id))
 
 # collapse counts
@@ -157,3 +170,18 @@ chipseeker_plots(peak_anno_4)
 chipseeker_plots(peak_anno_20)
 ```
 
+## **Volcano Plots**
+
+Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
+
+### 53_H3K4me3_vs_HN6_H3K4me3 {.tabset}
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
+generate_volcano_plots(contrast_id,gene_list_in="OFF")
+```
+
+### 53_H4K20m3_vs_HN6_H4K20me3 {.tabset}
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+contrast_id="53_H4K20m3_vs_HN6_H4K20me3"
+generate_volcano_plots(contrast_id,gene_list_in="OFF")
+```

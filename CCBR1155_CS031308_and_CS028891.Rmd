@@ -1,0 +1,279 @@
+---
+title: "CCBR1155 CS031014_and_CS028891 Joint Analysis"
+author: "Samantha Sevilla"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Project info
+This analysis report comparison two projects
+
+| CS ID | Type | Species | CCBR | Notes | 
+| -- | -- | -- | -- | -- |
+| CS031014 | Cut and Run | Hg38 | 1155 |  |
+| CS028891 | RNA Seq | Hg38 | 1155 |  |
+
+## Links
+- [CS031308](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chrX%3A15560138%2D15602945&hgsid=138221_o1QIpBNTM192Enh9AL7oIjMgpc7E)
+
+- [CS028891](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chr1%3A228424845%2D228425360&hgsid=138045_YaxblMavQd49PFnKV3dfLnT9Icne)
+
+```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
+############################################################
+# project information
+############################################################
+#paths
+parent_dir="~/../../Volumes/ccbr1155/"
+input_car_dir = "~/../../Volumes/ccbr1155/CS031308/"
+car_subpath=paste0(input_car_dir,"carlisle_221116/results/peaks/contrasts/")
+output_car_dir=paste0(input_car_dir,"r_analysis_221116/")
+
+input_rna_dir= "~/../../Volumes/ccbr1155/CS028891/"
+output_rna_dir=paste0(input_rna_dir,"r_analysis_220822/")
+
+output_dir = "~/../../Volumes/ccbr1155/CS031308_CS028891_complete/r_analysis_221129/"
+dir.create(file.path(output_dir), showWarnings = FALSE)
+```
+
+```{r user_params}
+############################################################
+# set global variables 
+############################################################
+padj_cutoff = 0.05
+species = "Homo sapiens"
+log2fc_cutoff_car=0.3785 #FC of 1.3
+log2fc_cutoff_rna=0.3785 #FC of 1.3
+minSize_gene_set=15
+cs_id="CS031308"
+
+dedup_status="dedup"
+norm_type_cutandrun="narrowGo_peaks"
+method="fragments"
+
+#http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H")
+
+# group to ignore
+ignore_groups=c()
+
+## pull cell_cycle genes
+gene_file = paste0(parent_dir,"docs/gene_list_apm.csv")
+gene_df_amp = read.csv(gene_file)
+
+# pull cell cycle genes
+gene_file = paste0(parent_dir,"docs/gene_list_infa.csv")
+gene_df_infa = read.csv(gene_file)
+
+# dbs
+if (species=="Homo sapiens"){
+  genome="hg38"
+  txdb="TxDb.Hsapiens.UCSC.hg38"
+} else if (species=="Mus Musculus"){
+  genome="mm10"
+}
+```
+
+```{r echo=FALSE, warning=FALSE, include=FALSE}
+# package list
+list.of.packages=c("DESeq2","dplyr","ggplot2","ggrepel","ggpubr","tidyverse",
+                   "ggVennDiagram","karyoploteR","RColorBrewer","EnhancedVolcano",
+                   "plotly","fgsea","msigdbr","gridExtra","kableExtra","clusterProfiler",
+                   "pheatmap","grid","gplots","pander","ChIPseeker","tidyr")
+  
+#install as needed
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) BiocManager::install(new.packages)
+
+# source functions
+source('CAR_core_functions.R')
+
+# load packages
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+#negate
+`%ni%` <- Negate(`%in%`)
+```
+
+## Annotation information
+The genomic region of the peak is reported in annotation column using [ChIPseeker](http://bioconductor.org/packages/devel/bioc/vignettes/ChIPseeker/inst/doc/ChIPseeker.html). Since some annotation may overlap, the following priority listing was set:
+
+- Promoter
+
+- 5’ UTR
+
+- 3’ UTR
+
+- Exon
+
+- Intron
+
+- Distal (defined as "distal intergenic")
+
+## Questions  {.tabset}
+
+### Question 1
+*1) What is the genome-wide distribution pattern of SMYD3 in HN-6 cells and how does this change after SMYD3 KO (ie in 5-3 cells compared to HN-6) (pie chart)?*
+```{r q1, warning=FALSE, echo=FALSE}
+# run function
+contrast_id=c("53_INFB_SMYD3_vs_HN6_INFB_SMYD3")
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+### Question 2
+*2) List of genes (excel sheet) corresponding to differential SMYD3 (log2FC by 30%)present on promoters or gene bodies (include only promoters, introns and exons).*
+```{r q2, warning=FALSE, echo=FALSE}
+contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+
+contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+main_differential_genes(contrast_id,contrast_list)
+# diff_genes_53_INFB_SMYD3_vs_HN6_INFB_SMYD3.csv
+```
+
+### Question 3
+*3) Heatmap of the above list of genes (increased peaks, decreased peaks).*
+```{r q3, warning=FALSE, echo=FALSE}
+contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+fshort="promoter_intron_exon_3UTR_5UTR"
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+generate_heat_map_differential(contrast_id,n_up=10,n_down=12,fshort) #8; 12
+```
+
+### Question 4
+- A gene list was created of the genes significant in either CUT&RUN (CAR) or the RNASeq experiment (pvalue and log2foldchange).  Venn diagrams were created, showing the overlap and uniquely significant genes for each experiment.
+
+- Genes that were significant in the CAR experiment (IE left side of venn diagram) were plotted on a Karoyplot to show gene placement. Color mapping indiciates up/down regulation in the CAR only experiment or in the CAR and RNA experiments.
+
+- The genes that were found to be significantly differentiated in both datasets are then presented in a datatable.
+
+- Next, RNASeq data was filtered to only include genes, regardless of significance, in the CAR data. This allowed for the peakAnnotations (IE Intron, Exon) to be added to each gene. The process was then repeated, with a list of genes significant in either experiment being created after filtering for the annotation (IE "Promoter","Intron","Exon") of interest. If applicable, Venn diagrams, karyoplots, and datatables were created.
+
+*4A) Of the decreasing SMYD3 peaks annotated to promoters/gene bodies of genes, what is the overlap with genes differentially downregulated (by 30% or more) on the RNA-seq database?*
+```{r q4down, warning=FALSE, echo=FALSE}
+contrast_id_car="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+contrast_id_rna="CRISPR_53_without_IFNb-parental_HN6_without_IFNb"
+
+# run genebodies, down
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+fshort=paste0("genebodies_down")
+main_differential_overlap(subset_list=gene_bodies_list,
+                          rna_regulation="down",
+                          car_regulation="down")
+```
+
+*4B) Of the decreasing SMYD3 peaks annotated to promoters/gene bodies of genes, what is the overlap with genes differentially upregulated (by 30% or more) on the RNA-seq database? *
+
+```{r q4up, warning=FALSE, echo=FALSE}
+contrast_id_car="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+contrast_id_rna="CRISPR_53_without_IFNb-parental_HN6_without_IFNb"
+
+# run genebodies, up
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+fshort=paste0("genebodies_up")
+main_differential_overlap(subset_list=gene_bodies_list,
+                          rna_regulation="up",
+                          car_regulation="down")
+```
+
+*5) Do SMYD3 and H4K20me3 co-occupy genes and if so, which ones?*
+```{r q5}
+contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+contrast_id_car1="~/../../Volumes/ccbr1155/CS031308/r_analysis_221116/"
+contrast_id_car2="~/../../Volumes/ccbr1155/CS031014/r_analysis_221123/"
+cs_id1="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+cs_id2="53_H4K20m3_vs_HN6_H4K20me3"
+
+main_differential_overlap_car_to_car(contrast_list=contrast_list,
+                                     contrast_id_car1=contrast_id_car1,
+                                     contrast_id_car2=contrast_id_car2,
+                                     cs_id1=cs_id1,
+                                     cs_id2=cs_id2)
+
+```
+
+*5) Do SMYD3 and H3K4me3 co-occupy genes and if so, which ones?*
+```{r q5}
+contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+contrast_id_car1="~/../../Volumes/ccbr1155/CS031308/r_analysis_221116/"
+contrast_id_car2="~/../../Volumes/ccbr1155/CS031014/r_analysis_221123/"
+cs_id1="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+cs_id2="53_H3K4me3_vs_HN6_H3K4me3"
+
+main_differential_overlap_car_to_car(contrast_list=contrast_list,
+                                     contrast_id_car1=contrast_id_car1,
+                                     contrast_id_car2=contrast_id_car2,
+                                     cs_id1=cs_id1,
+                                     cs_id2=cs_id2)
+
+```
+
+### Question 7
+*7a) Overlap of differential SMYD3 peaks localized on promoters/gene bodies with type I IFN response.*
+```{r q7a}
+cs_id1="53_INFB_SMYD3"
+cs_id2="53_H3K4me3"
+main_piecharts_from_genelist(contrast_id=paste0(cs_id1,"_",cs_id2),
+                             gene_list=gene_df_infa$Human,
+                             gene_list_name="inf_alpha_genes",
+                             process_type="car_car")
+
+main_piecharts_from_genelist(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                             gene_list=gene_df_infa$Human,
+                             gene_list_name="inf_alpha_genes",
+                             process_type="single")
+
+```
+
+### Question 7
+*7b) Overlap of differential SMYD3 peaks localized on promoters/gene bodies with APM response.*
+```{r q7a}
+cs_id1="53_INFB_SMYD3"
+cs_id2="53_H3K4me3"
+main_piecharts_from_genelist(contrast_id=paste0(cs_id1,"_",cs_id2),
+                             gene_list=gene_df_amp$Human,
+                             gene_list_name="amp_genes",
+                             process_type="car_car")
+
+main_piecharts_from_genelist(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                             gene_list=gene_df_amp$Human,
+                             gene_list_name="amp_genes",
+                             process_type="single")
+
+```
+
+### Question 8
+*8) Generate SMYD3 CUT&RUN volcano plot (significant peaks affected by 30% up or down) and a separate RNA-seq volcano plot, and mark immune-related genes (type I IFN response) in each.*
+
+```{r q8a, warning=FALSE, echo=FALSE, message=FALSE}
+gene_list=gene_df_infa$Human
+gene_list_name="inf_alpha_genes"
+generate_volcano_plots("CAR",
+                       contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                       gene_list_in="ON")
+
+contrast_id="CRISPR_53_without_IFNb-parental_HN6_without_IFNb"
+generate_volcano_plots("RNA",contrast_id,gene_list_in="ON")
+```
+
+### Question 8
+*8) Generate SMYD3 CUT&RUN volcano plot (significant peaks affected by 30% up or down) and a separate RNA-seq volcano plot, and mark immune-related genes (amp response) in each.*
+
+```{r q8b, warning=FALSE, echo=FALSE, message=FALSE}
+gene_list=gene_df_amp$Human
+gene_list_name="amp_genes"
+generate_volcano_plots("CAR",
+                       contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                       gene_list_in="ON")
+
+contrast_id="CRISPR_53_without_IFNb-parental_HN6_without_IFNb"
+generate_volcano_plots("RNA",contrast_id,gene_list_in="ON")
+```
+
+##############################################################################################################
+### Question 10
+*10)Generate boxplots of ChIP seq intensity for H3K4me3 peaks within promoters or gene body regions.*
+```{r}
+contrast_id=c("53_INFB_SMYD3_vs_HN6_INFB_SMYD3")
+generate_intensity_boxplot(contrast_id)
+```

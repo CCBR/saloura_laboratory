@@ -7,13 +7,20 @@ editor_options:
   chunk_output_type: console
 ---
 
+## Project Info
+| CS ID | Type | Species | CCBR | Notes | 
+| -- | -- | -- | -- | -- |
+| CS028891 | RNASeq | Hg38 | 1155 | |
+
+## Links
+- [CS028891](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chr1%3A228424845%2D228425360&hgsid=138045_YaxblMavQd49PFnKV3dfLnT9Icne)
 
 ```{r setup, include=FALSE}
 #dirs
-parent_dir="~/../../Volumes/ccbr1155/"
-input_dir = "~/../../Volumes/ccbr1155/CS028891/pipeliner_220713/"
-output_dir = "~/../../Volumes/ccbr1155/CS028891/r_analysis_220822/"
-dir.create(file.path(output_dir), showWarnings = FALSE)
+parent_dir="~/../../../Volumes/ccbr1155/"
+input_dir = "~/../../../Volumes/ccbr1155/CS028891/pipeliner_220713/"
+output_rna_dir = "~/../../../Volumes/ccbr1155/CS028891/r_analysis_220822/"
+dir.create(file.path(output_rna_dir), showWarnings = FALSE)
 ```
 
 ```{r thresholds}
@@ -24,7 +31,7 @@ ignore_groups=c("CRISPR_52_with_IFNb","CRISPR_53_with_IFNb","parental_HN6_with_I
 cntrl="parental_HN6_without_IFNb"
 
 # Threshold values
-log2fc_cutoff=1.5
+log2fc_cutoff=0.3785 #FC of 1.3
 padj_cutoff=0.05
 species_in = "Homo sapiens" #either "Homo sapiens" or "Mus musculus"
 analysis_type = "DESeq2" #either limma or DESeq2
@@ -56,7 +63,7 @@ new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"
 if(length(new.packages)) BiocManager::install(new.packages)
 
 # source functions
-source('RNASeq_core_functions.R')
+source('CAR_core_functions.R')
 
 # load packages
 invisible(lapply(list.of.packages, library, character.only = TRUE))
@@ -204,36 +211,20 @@ generate_heat_map(heatmap_df)
 
 ## **Volcano Plots**
 
-Volcano plots are created to show the statistical significance (p-value or FDR) versus magnitude of change (fold change).
+Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
 
 ### CRISPR_52_without_IFNb {.tabset}
-#### p-value
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-treatment="CRISPR_52_without_IFNb"
-type_in="pvalue"
-generate_volcano_plots(cntrl,treatment,type_in)
-```
-
-#### FDR
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 treatment="CRISPR_52_without_IFNb"
 type_in="FDR"
-generate_volcano_plots(cntrl,treatment,type_in)
+generate_volcano_plots_rnaseq(cntrl,treatment,type_in)
 ```
 
 ### CRISPR_53_without_IFNb {.tabset}
-#### p-value
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-treatment="CRISPR_53_without_IFNb"
-type_in="pvalue"
-generate_volcano_plots(cntrl,treatment,type_in)
-```
-
-#### FDR
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 treatment="CRISPR_53_without_IFNb"
 type_in="FDR"
-generate_volcano_plots(cntrl,treatment,type_in)
+generate_volcano_plots_rnaseq(cntrl,treatment,type_in)
 ```
 
 ## **Enriched Pathways** 
