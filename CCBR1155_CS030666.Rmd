@@ -1,31 +1,27 @@
 ---
 title: "CCBR1155_CS030666"
 author: "Samantha Sevilla"
-date: "6/28/2022"
+date: "`r Sys.Date()`"
 output: html_document
 editor_options: 
   chunk_output_type: console
 ---
-
-```{r setup, echo=FALSE, warning=FALSE, include=FALSE}
-packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap")
-
-invisible(lapply(packages, library, character.only = TRUE))
-```
-
 # Background
-### Sample information
-Samples include 2 projects: 
+######################################################################
+## Project info
+######################################################################
+This analysis report includes:
 
-- CS030666: HN-6 treated with siNC or siSMYD3 x 3 days, mapping for H3K4me3, H4K20me3, H3K27me3
+| CS ID | Type | Species | CCBR | Notes | 
+| -- | -- | -- | -- | -- |
+| CS030666 | Cut and Run | Hg38 | 1155 |HN-6 treated with siNC or siSMYD3 x 3 days, mapping for H3K4me3, H4K20me3, H3K27me3  |
 
-- CS023223: HN-6 siNC versus HN-6 siSMYD3 x 3 days: Bulk RNA sequencing, + IFN-β
-
-
-### Links to Tracks
+######################################################################
+## Links to Tracks
+######################################################################
 USBC Genome Tracks were created for each project. They can be accessed here:
 
-- [CS030666](https://auth.nih.gov/CertAuthV3/forms/mfa/Signin_AuthApp.aspx?TYPE=33554433&REALMOID=06-a79b1fbe-ad62-4a76-9a18-ff7aea9ff3ed&GUID=&SMAUTHREASON=0&METHOD=GET&SMAGENTNAME=-SM-11Ey3xXHozFUjVUa8ZRRFmE7UrTuF35n7wjMbqaoNyqme%2f428bGHwvvcp3cU%2bcNI&TARGET=-SM-HTTPS%3a%2f%2fhpcnihapps%2ecit%2enih%2egov%2fgenome%2fcgi--bin%2fhgTracks%3fhgS_doOtherUser%3dsubmit%26hgS_otherUserName%3dsevillas2%26hgS_otherUserSessionName%3dCS030666)
+- [CS030666](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chrX%3A15560138%2D15602945&hgsid=138539_7ld4lkx4zwNnn2SxcOHGJ8QBznab )
 
 # Analysis
 ######################################################################
@@ -44,680 +40,232 @@ USBC Genome Tracks were created for each project. They can be accessed here:
   - Peak annotations were stratified into those that were over represented, as well as those under-represented between each comparison. For example peakID chr1:100099186-100105441 had the following average counts for these two samples:	CRISPR_NC_2_Smyd3 (~65,287) and CRISPR_KO_10_Smyd3 (~349,940). The log2FoldChange between these two samples is approximately -2.29. The comparison CRISPR_NC_Smyd3_vs_KO_Smyd3 with a -2.29 log2FC would indicate that there is an UNDER-representation in CRISPR_NC_2_Smyd3 as compared to CRISPR_KO_10_Smyd3 for this gene ID (Cntnap5b).
   
   
-```{r user_params, echo=FALSE, warning=FALSE, include=FALSE}
-############################################################
-# set global variables 
-############################################################
-p_val_set = 0.05
-species = "mouse"
-log2fc_set = log(1.5,2)
-method="fragments" #AUC or fragments
-dedup_status="dedup"
-extensions=c("__dedup__norm.relaxed.bed")
-scalesfbymean="Y"
-rawcountsprescaled="N"
-```
-
 ```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
 ############################################################
 # project information
 ############################################################
 #paths
-analysis_dir="~/../../Volumes/ccbr1155/"
-parent_dir="~/../../Volumes/ccbr1155/CS030666"
-contrast_subpath="/analysis/results/peaks/contrasts/"
-
-# read in sample list
-master_contrast_df=read.csv(paste0(analysis_dir,"sampleinfo/sample_list_CS030666_contrast.txt"),header=TRUE)
-
-# project list
-project_list=unique(master_contrast_df$project_id)
-  
-#sample list
-master_sample_df=read.csv(paste0(analysis_dir,"sampleinfo/sample_list_CS030666_sample.txt"),header=TRUE,sep="\t")
-colnames(master_sample_df)=c("sample_id","project_id","group_id")
+parent_dir="~/../../Volumes/CUTRUN/"
+input_dir = "~/../../Volumes/CUTRUN/analysis/CS030666/"
+output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS030666/r_analysis_230112/"
+output_dir=output_car_dir
+car_subpath=paste0(input_dir,"carlisle_230118/results/peaks/0.05/contrasts/")
+img_dir=paste0(output_car_dir,"img/")
+dir.create(file.path(output_car_dir), showWarnings = FALSE)
+dir.create(file.path(img_dir), showWarnings = FALSE)
+cs_id="CS030666"
 ```
 
-```{r func_qc, echo=FALSE, warning=FALSE, include=FALSE}
+```{r user_params}
 ############################################################
-# QC Analysis
+# set global variables 
 ############################################################
-generate_QC_plots<-function(contrast_id,exclusionlist=""){
-  # set variables
-  rawcountsmatrix=paste0(parent_dir,contrast_subpath,contrast_id,extensions,"/",
-                          contrast_id,extensions,"_fragmentscountsmatrix.txt")
-  coldata=paste0(parent_dir,contrast_subpath,contrast_id,extensions,"/",contrast_id,extensions,"_sampleinfo.txt")
-  condition1=strsplit(contrast_id,"_vs_")[[1]][1]
-  condition2=strsplit(contrast_id,"_vs_")[[1]][2]
+padj_cutoff = 0.05
+species = "Homo Sapiens"
+log2fc_cutoff_car=0.3785 #FC of 1.3
+method="fragments" #AUC or fragments
+dedup_status="dedup"
+scalesfbymean="Y"
+rawcountsprescaled="N"
 
-  # filter based off of params
-  sampleinfo = read.csv(coldata,header = TRUE,sep="\t",
-                      strip.white = TRUE,check.names = FALSE,colClasses = "character")
-  sampleinfo = sampleinfo[sampleinfo$group == condition1 | sampleinfo$group == condition2,]
-  sampleinfo$group = relevel(as.factor(sampleinfo$group),condition2)
-  
-  # prep counts
-  rawcounts = read.csv(rawcountsmatrix,
-                       header = TRUE,sep="\t",
-                       comment.char = "#", 
-                       strip.white = TRUE,
-                       check.names = FALSE,
-                       colClasses = "character")
-  rawcounts = as.data.frame(rawcounts)
-  rawcounts %>% column_to_rownames(var="peakID") -> rawcounts
-  
-  # filter based off of sampleinfo
-  rawcounts = rawcounts[,colnames(rawcounts)==sampleinfo$samplename]
-  
-  # convert character to numeric to integer
-  x = matrix(as.numeric(as.matrix(rawcounts)),ncol=ncol(rawcounts))
-  x = matrix(mapply(x,FUN=as.integer),ncol=ncol(rawcounts))
-  x = as.data.frame(x)
-  colnames(x) = colnames(rawcounts)
-  rownames(x) = rownames(rawcounts)
-  rawcounts = x
-
-  # filter
-  sampleinfo=sampleinfo[sampleinfo$samplename==colnames(rawcounts),]
-  sampleinfo$library_size=colSums(rawcounts)/1e6
-  sampleinfodf = as.data.frame(sampleinfo)
-  sampleinfodf$dupstatus = dedup_status
-  rownames(sampleinfo) = sampleinfo$samplename
-  pander(sampleinfodf,style="rmarkdown")
-  
-  # melt data
-  rawcounts_logcpm = log2(cpm(rawcounts))
-  cpm_melt=reshape2::melt(rawcounts_logcpm)
-  colnames(cpm_melt)=c("peakID","samplename","log2cpm")
-
-  # print boxplots
-  p = ggplot(cpm_melt,aes(x=samplename,y=log2cpm)) + 
-    geom_boxplot(fill=as.factor(as.numeric(as.factor(sampleinfo$group))+1)) +
-    theme_classic() +
-    coord_flip()
-  print(p)
-  
-  # run deseq, plot
-  dds=run_deseq_analysis(rawcounts,sampleinfo)
-  generate_pca_plots(dds,sampleinfo,exclusionlist)
-
-  # run exclusions
-  if (length(exclusionlist)!= 0){
-    `%ni%` <- Negate(`%in%`)
-    rawcounts=rawcounts[,colnames(rawcounts) %ni% exclusionlist]
-    sampleinfo = subset(sampleinfo,!(samplename %in% exclusionlist))
-    
-    # run analysis again
-    dds=run_deseq_analysis(rawcounts,sampleinfo)
-    generate_pca_plots(dds,sampleinfo,exclusionlist)
-  }
+# reference info
+if (species=="Homo Sapiens"){
+  txdb_pkg="TxDb.Hsapiens.UCSC.hg38.knownGene"
 }
 
-run_deseq_analysis<-function(rawcounts,sampleinfo){
-  # set variables
-  bbpaths=paste0(parent_dir,contrast_subpath,"/bed_bedgraph_paths.tsv")
-
-  # run DESEQ
-  dds <- DESeqDataSetFromMatrix(countData = as.matrix(rawcounts),
-                                colData = sampleinfo[,c("samplename","group")],
-                                design = ~ group)
-
-  # set up df of scaling information
-  bbpaths_df = read.csv(bbpaths,
-                        header = FALSE,sep="\t",
-                        comment.char = "#", 
-                        strip.white = TRUE)
-  colnames(bbpaths_df)=c("replicate",
-                          "sample",
-                          "dupstatus",
-                          "peaktype",
-                          "peakfile",
-                          "bedgraph",
-                          "scalingfactor")
-  sf_df=unique(bbpaths_df[,c("replicate","scalingfactor")])
-  dds_cols=colnames(dds)
-  sfs=c()
-  for (i in dds_cols){
-    if (i %in% sf_df$replicate){
-      sfs=c(sfs,sf_df[sf_df$replicate==i,"scalingfactor"])
-    }
-  }
-  # scaling factor magnitudes are variable and depend on the constant used while scaling using spiked-in reads
-  # DESeq2 size factors are generally hovering around 1
-  # we try to rescale the scaling factors by dividing them by mean of all scaling factors ... this way they also 
-  # start hovering around 1 ... based on suggestion from Sohyoung.
-  if (length(sfs)==length(dds_cols)){
-    if (scalesfbymean == "Y") {
-      sfs = sfs/mean(sfs)
-    }
-    
-    # AUC-based counts are prescaled, but fragmentbased counts are not prescaled
-    if (rawcountsprescaled == "N") {
-      rawcounts=round(t(t(rawcounts) * sfs))
-      dds <- DESeqDataSetFromMatrix(countData = as.matrix(rawcounts),
-                                    colData = sampleinfo[,c("samplename","group")],
-                                    design = ~ group)
-    }
-    
-    DESeq2::sizeFactors(dds)=sfs
-  } else {
-      print("Samples are spiked, but DESeq2 scaling factors used!!")
-  }
-  
-  return(dds)
-}
-
-generate_pca_plots<-function(dds,sampleinfo,exclusionlist){
-  # analysis of variance
-  rld <- vst(dds)
-  assayrld = as.data.frame(assay(rld))
-  assayrld$row_variance = rowVars(as.matrix(assayrld))
-  assayrld = arrange(assayrld,desc(row_variance))
-  zero_variance_rows=assayrld$row_variance<1e-5
-  assayrld$row_variance = NULL
-  assayrld = assayrld[!zero_variance_rows,]
-  if (nrow(assayrld) > 500){
-    assayrld=assayrld[1:500,]
-  }
-  
-  # create title
-  if (length(exclusionlist)==0){
-    plottitle="All Samples Normalized"
-  } else {
-    plottitle="Selected Samples Normalized"
-  }
-  #plot PCA
-  pca=prcomp(t(assayrld),scale. = T)
-  m.pc1 = round(pca$sdev[1]^2/sum(pca$sdev^2)*100,2)
-  m.pc2 = round(pca$sdev[2]^2/sum(pca$sdev^2)*100,2)
-  m.pc3 = round(pca$sdev[3]^2/sum(pca$sdev^2)*100,2)
-  xlab=paste0("PC1(",m.pc1,"%)")
-  ylab=paste0("PC2(",m.pc2,"%)")
-  p = ggplot(pca$x,aes(x=PC1,y=PC2,label=rownames(pca$x)))+
-    geom_point(col=as.factor(as.numeric(as.factor(sampleinfo$group))+1))+
-    xlab(xlab)+ylab(ylab)+
-    ggtitle(plottitle)+
-    geom_text_repel(max.overlaps = 10,size=2)+
-    theme_light()
-  print(p)
-}
+# group to ignore
+ignore_groups=c()
 
 ```
 
-```{r func_collapsed, echo=FALSE, warning=FALSE, include=FALSE}
-############################################################
-# pie charts for collapsed counts
-############################################################
-# create pie chart for each comparison
-plot_pies_collapsed<-function(sub_in,df_in,y_in,percent_in,plot_in,title_in){
-  p = ggplot(sub_in, aes(x = "" , y = get(y_in), fill = fct_inorder(shortAnno))) +
-  geom_col(width = 1, color = 1) +
-  coord_polar(theta = "y") +
-  scale_fill_brewer(palette = "Pastel1") +
-  geom_label_repel(data = df_in,
-                     aes(y = pos, label = paste0(get(percent_in), "%")),
-                     size = 4, nudge_x = 1, show.legend = FALSE) +
-  guides(fill = guide_legend(title = "Group")) +
-  ggtitle(title_in) +
-  theme_void()
-    
-  p_out=ggarrange(p, 
-        labels = c(plot_in),
-        ncol = 1, nrow = 1)
-  return(p_out)
-}
+```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
+# package list
+list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb_pkg, "UpSetR","ggupset","ggimage")
 
-# main function
-generate_piecharts_from_collapsed<-function(sample_id){
-  # subset for sample
-  sub_df=subset(collapsed_df,sample_sub==sample_id)
+#install as needed
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) BiocManager::install(new.packages)
 
-  # get positions, plot
-  ## all totals
-  tmp_df <- sub_df %>% 
-  mutate(csum = rev(cumsum(rev(n))), 
-         pos = n/2 + lead(csum, 1),
-         pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("Significant Peaks by Annotation (ALL):\n",
-                   unique(sub_df$sample_sub)," (N=",sum(sub_df$n),")")
-  p1 = plot_pies_collapsed(sub_df,tmp_df,"n","perc","A",plot_title)
-  
-  ## up
-  tmp_df <- sub_df %>% 
-  mutate(csum = rev(cumsum(rev(up))), 
-         pos = up/2 + lead(csum, 1),
-         pos = if_else(is.na(pos), up/2, pos))
-  plot_title=paste0("Significant Peaks by Annotation (OVER):\n",
-                   unique(sub_df$sample_sub)," (N=",sum(sub_df$up),")")
-  p2 = plot_pies_collapsed(sub_df,tmp_df,"up","perc_up","B",plot_title)
-  
-  ##down
-  tmp_df <- sub_df %>% 
-  mutate(csum = rev(cumsum(rev(down))), 
-         pos = down/2 + lead(csum, 1),
-         pos = if_else(is.na(pos), down/2, pos))
-  plot_title=paste0("Significant Peaks by Annotation (UNDER):\n",
-                   unique(sub_df$sample_sub)," (N=",sum(sub_df$down),")")
-  p3 = plot_pies_collapsed(sub_df,tmp_df,"down","perc_down","C",plot_title)
-  print(tmp_df)
-  print(p1)
-  print(p2)
-  print(p3)
+# source functions
+source(paste0(parent_dir,'github/CAR_core_functions.R'))
+
+# load packages
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+#negate
+`%ni%` <- Negate(`%in%`)
+
+# assign annodbs
+if (species=="Homo Sapiens"){
+  txdb<-TxDb.Hsapiens.UCSC.hg38.knownGene
+  annodb="org.Hs.eg.db"
 }
 ```
 
-```{r func_genelists, echo=FALSE, warning=FALSE, include=FALSE}
-############################################################
-# pie charts for gene lists
-############################################################
-# create pie chart for significant peaks within PI gene list for promoters
-plot_pies_genelist<-function(df_in,y_in,percent_in,fill_in,title_in){
-  p = ggplot(df_in, aes(x = "" , y = get(y_in), fill = fct_inorder(get(fill_in)))) +
-    geom_col(width = 1, color = 1) +
-    coord_polar(theta = "y") +
-    scale_fill_brewer(palette = "Pastel1") +
-    geom_label_repel(data = df_in,
-                     aes(y = pos, label = paste0(get(percent_in), "%")),
-                     size = 4, nudge_x = 1, show.legend = FALSE) +
-    guides(fill = guide_legend(title = "Group")) +
-    ggtitle(title_in) +
-    theme_void()
+## **Data Processing**
+```{r contrast, include=FALSE,warning=FALSE, message=FALSE}
+####################
+# run metadata input
+####################
+#groups input
+#awk '{print$1"_"$2,$1}' samples.tsv > groups.tab
+#sed -i "s/ /\\t/g" groups.tab 
+groups_df = read.csv(paste0(input_dir,"groups.tab"),sep="\t",header = FALSE)[,c("V1","V2")]
+colnames(groups_df) = c("sampleid","group")
+rownames(groups_df)=groups_df$sampleid
 
-    return(p)
-}
+## if there is a subset gene list, select files
+gene_file = paste0(parent_dir,"docs/gene_list_master.csv")
+gene_df = read.csv(gene_file)
 
-# main function to generate pie charts
-generate_piecharts_from_genelist<-function(sample_id){
-  # subset for sample
-  sub_col_df=subset(collapsed_df,sample_sub==sample_id)
-  sub_pi_df=subset(pi_df,sample_sub==sample_id)
-    
-  # calculate counts
-  repressors=nrow(subset(sub_pi_df,gene_list=="REPRESSORS" & shortAnno=="Promoter"))
-  repressors_total=nrow(subset(gene_list,Set=="REPRESSORS"))
-  repressors_perc=round((repressors/repressors_total)*100,2)
-  ACCELERATORS=nrow(subset(sub_pi_df,gene_list=="ACCELERATORS"& shortAnno=="Promoter"))
-  ACCELERATORS_total=nrow(subset(gene_list,Set=="ACCELERATORS"))
-  ACCELERATORS_perc=round((ACCELERATORS/ACCELERATORS_total)*100,2)
-  INVASION=nrow(subset(sub_pi_df,gene_list=="INVASION"& shortAnno=="Promoter"))
-  INVASION_total=nrow(subset(gene_list,Set=="INVASION"))
-  INVASION_perc=round((INVASION/INVASION_total)*100,2)
-  other=unique(sub_col_df$total)-nrow(sub_pi_df)
-  total=unique(sub_col_df$total)
-    
-  # create df
-  tmp_df=data.frame("IDENTIFIED","REPRESSORS",repressors,round((repressors/total)*100,2),repressors_perc)
-  tmp_df=rbind(tmp_df,c("IDENTIFIED","ACCELERATORS",ACCELERATORS,round((ACCELERATORS/total)*100,2),ACCELERATORS_perc))
-  tmp_df=rbind(tmp_df,c("IDENTIFIED","INVASION",INVASION,round((INVASION/total)*100,2),INVASION_perc))
-  tmp_df=rbind(tmp_df,c("IDENTIFIED","OTHER",other,round((other/total)*100,2),0))
-  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","REPRESSORS",repressors_total-repressors,0,(100-repressors_perc)))
-  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","ACCELERATORS",ACCELERATORS_total-ACCELERATORS,0,100-ACCELERATORS_perc))
-  tmp_df=rbind(tmp_df,c("NOT IDENTIFIED","INVASION",INVASION_total-INVASION,0,100-INVASION_perc))
-  colnames(tmp_df)=c("Search","Category","n","perc","perc_list")
-  tmp_df$n=as.numeric(tmp_df$n)
+# read in the contrast list
+#cp carlisle_230111/config/contrasts.tsv .
+contrast_df=read.csv(paste0(input_dir,"contrasts.tsv"),sep="\t")
+colnames(contrast_df)=c("CNTRL","TREATMENT")
+contrast_df$contrast=paste0(contrast_df$CNTRL,"_vs_",contrast_df$TREATMENT)
 
-  ## all totals
-  tmp_sub_df <- subset(tmp_df,Search=="IDENTIFIED") %>%
-    mutate(csum = rev(cumsum(rev(n))),
-           pos = n/2 + lead(csum, 1),
-           pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("All Genes (",sum(tmp_sub_df$n),")")
-  p1 = plot_pies_genelist(tmp_sub_df,"n","perc","Category",plot_title)
-  
-  ## ACCELERATORS
-  tmp_sub_df <- subset(tmp_df,Category=="ACCELERATORS") %>%
-    mutate(csum = rev(cumsum(rev(n))),
-           pos = n/2 + lead(csum, 1),
-           pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("    ACCELERATORS Genes (N=16)")
-  p2 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
-  
-  ## REPRESSORS
-  tmp_sub_df <- subset(tmp_df,Category=="REPRESSORS") %>%
-    mutate(csum = rev(cumsum(rev(n))), 
-           pos = n/2 + lead(csum, 1),
-           pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("    REPRESSORS Genes (N=10)")
-  p3 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
-  
-  ## INVASION
-  tmp_sub_df <- subset(tmp_df,Category=="INVASION") %>%
-    mutate(csum = rev(cumsum(rev(n))), 
-           pos = n/2 + lead(csum, 1),
-           pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("    INVASION Genes (N=16)")
-  p4 = plot_pies_genelist(tmp_sub_df,"n","perc_list","Search",plot_title)
-  
-  p_final=ggarrange(p1,p2,p3,p4,
-          labels = c("A","B","C","D"),
-          ncol = 2, nrow = 2)
-  plot_title=paste0("Significant Peaks by Gene Lists in Promoters:\n",unique(sub_col_df$sample_sub))
-  p_final=annotate_figure(p_final, top = text_grob(plot_title, face = "bold", size = 14))
-  print(p_final)
-}
-
+#filter
+groups_df=subset(groups_df, group %ni% ignore_groups)
+contrast_df=subset(contrast_df, (CNTRL %in% unique(groups_df$group)) | (TREATMENT %in% unique(groups_df$group)))
 ```
 
-```{r func_heatmap, echo=FALSE, warning=FALSE, include=FALSE}
-############################################################
-# heatmaps for gene lists
-############################################################
-# create heatmaps for samples
-generate_heatmaps_samples<-function(sample_id,project_id,gene_id){
-  # read in counts matrix
-  tmp_df=read.csv(paste0(parent_dir,
-                         project_id,
-                         "/results/peaks/contrasts/",
-                         sample_id, "__dedup__norm.relaxed.bed/",
-                         sample_id, "__dedup__norm.relaxed.bed_countsmatrix.txt"),sep="\t")
-  
-  # create peak list of sig PI genes
-  peak_list=subset(pi_df,gene_list==gene_id)$peakID
-  
-  # subset for peaks in peak_list
-  sub_df=subset(tmp_df,peakID %in% peak_list)
-  
-  # check for peaks, if none exit with message
-  if (nrow(sub_df)<1){
-    print(paste0("No peaks found within PI gene list for sample ",sample_id, " for ", gene_id))
-  } else{
-    # set peakID as rownmae, remove, and set df as numeric
-    counts_in=sub_df[,c(2:ncol(sub_df))]
-    counts_in <- sapply(counts_in, as.numeric)
-    rownames(counts_in)=sub_df$peakID
-    
-    # transform and scale
-    tmean.scale = t(scale(t(counts_in)))
-    tmean.scale = tmean.scale[!is.infinite(rowSums(tmean.scale)),]
-    tmean.scale = na.omit(tmean.scale)
-    
-    # Creating Dataframe to map samplenames to groups
-    meta = subset(master_sample_df,sample_id %in% colnames(counts_in))
-    groups <- data.frame(as.factor(meta$group_id))
-    colnames(groups) <- "Groups"
-    rownames(groups) <- meta$sample_id
-    
-    # Creating Group Column Annotation Colors
-    columnColors <- c("lightpink","lightblue","orange","purple")
-    names(columnColors) <- unique(groups$Groups)
-    anno_colors <- list(Groups = columnColors)
-    paletteLength <- 1000
-    mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
-    
-    if (nrow(counts_in)>20){
-      pheatmap(tmean.scale, 
-               scale = "none", 
-               main=paste0("Peaks associated with genes in ", gene_id,":\n",sample_id),
-               cellwidth = 30, fontsize = 10, fontsize_row = 8, fontsize_col = 8, 
-               color = mycolors, border_color = "NA",
-               legend_breaks = c(-3,-2,-1,0,1,2,3), annotation_colors = anno_colors, 
-               show_rownames = FALSE)
-    } else{
-      # generate annotation - SYMBOL,shortAnno (Ly6e,Promoter)
-      anno_list=list()
-      for (row_id in rownames(tmean.scale)){
-        anno_list=append(anno_list,
-                         paste(subset(pi_df,peakID==row_id)$SYMBOL,subset(pi_df,peakID==row_id)$shortAnno,sep="-"))
-      }
-      pheatmap(tmean.scale, 
-               scale = "none", 
-               main=paste0("Peaks associated with genes in ", gene_id,":\n",sample_id),
-               cellwidth = 30, fontsize = 10, fontsize_row = 8, fontsize_col = 8, 
-               color = mycolors, border_color = "NA",
-               legend_breaks = c(-3,-2,-1,0,1,2,3), annotation_colors = anno_colors,
-               labels_row = anno_list)
-    }
-  }
-}
-
-# create heatmaps for contrasts
-generate_heatmaps_contrasts<-function(df_in,title_in){
-  
-  #subset for complete cases
-  sub_df=df_in[complete.cases(df_in),]
-  
-  #for each sample log2foldchange values for each gene
-  heatmap_df=data.frame()
-  for(rowid in rownames(sub_df)){
-    sample_id=sub_df[rowid,"sample_sub"]
-    gene_id=sub_df[rowid,"SYMBOL"]
-    heatmap_df[sample_id,gene_id]=sub_df[rowid,"log2FoldChange"]
-  }
-
-  # shorten rownames
-  rownames(heatmap_df)=gsub("_relaxed","",rownames(heatmap_df))
-  rownames(heatmap_df)=gsub("_stringent","",rownames(heatmap_df))
-  rownames(heatmap_df)=gsub("_narrowPeak","",rownames(heatmap_df))
-  rownames(heatmap_df)=gsub("_dedup","",rownames(heatmap_df))
-  rownames(heatmap_df)=gsub("_no","",rownames(heatmap_df))
-  
-  #set colors
-  paletteLength <- 1000
-  mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
-  
-  # scale
-  scale_df= t(scale(t(heatmap_df)))
-  scale_df=as.matrix(scale_df %>% replace(is.na(.), 0))
-  
-  if(ncol(scale_df)<90){
-    pheatmap::pheatmap(scale_df, 
-             scale = "none", main=title_in,
-             fontsize = 10, fontsize_row = 6, fontsize_col = 4.5, color = mycolors, 
-             border_color = "NA",
-             legend_breaks = c(-5,-4,-3,-2,-1,0,1,2,3,4,5))
-  }else{
-    pheatmap::pheatmap(scale_df, 
-             scale = "none", main=title_in,
-             fontsize = 10, fontsize_row = 8, fontsize_col = 6, color = mycolors, 
-             border_color = "NA",
-             legend_breaks = c(-5,-4,-3,-2,-1,0,1,2,3,4,5),
-             show_colnames = FALSE)
-  }
-}
-
+The following samples are included in this analysis:
+```{r dt_samp, echo=FALSE,warning=FALSE, message=FALSE}
+DT::datatable(groups_df)
 ```
 
-######################################################################
-## Question QC
-######################################################################
-##### Reviewing sample QC allows us to determine if there are outliers present in analysis. If there are, samples are removed in the "Selected Samples Normalized" plots.
+The following contrasts are included in this analysis:
+```{r dt_group, echo=FALSE,warning=FALSE, message=FALSE}
+DT::datatable(contrast_df)
+```
 
-```{r qc, echo=FALSE, warning=FALSE}
-exclusion_list=c("siSmyd3_H3K27me3_3","siNC_H3K27me3_1")
-generate_QC_plots("siNC_H3K27me3_vs_siSmyd3_H3K27me3",exclusion_list)
+## **Quality Control**
+Raw counts are read in and filtered by counts per million reads (CPM). Filtering thresholds are set such that at least two samples must have a CPM of >0.5 to be reviewed. Two plots were generated for each sample: Relative log expression (RLE) plots and Principal Coordinate Analysis (PCA) plots.
 
+Reviewing sample QC allows us to determine if there are outliers present in analysis and the success of data normalization. If there are, samples are removed in the "Selected Samples Normalized" plots.
+
+## Quality Control  {.tabset}
+
+#### siNC_H3K27me3_vs_siSmyd3_H3K27me3
+```{r qc1, echo=FALSE, warning=FALSE, message=FALSE}
 exclusion_list=c()
-generate_QC_plots("siNC_H3K4me3_vs_siSmyd3_H3K4me3",exclusion_list)
+contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3"
+norm_type_cutandrun="broadGo_peaks"
 
-exclusion_list=c("siNC_H4K20me3_3")
-generate_QC_plots("siNC_H4K20me3_vs_siSmyd3_H4K20me3",exclusion_list)
+peak_anno_1=main_prep_qc_core(contrast_id,exclusion_list)
 ```
 
-##### Reviewing counts of significant peaks guides analysis parameters downstream.
+#### siNC_H3K4me3_vs_siSmyd3_H3K4me3
+```{r qc2, echo=FALSE, warning=FALSE, message=FALSE}
+exclusion_list=c()
+contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3"
+norm_type_cutandrun="narrowGo_peaks"
 
-```{r preprocess, echo=FALSE, warning=FALSE}
+peak_anno_2=main_prep_qc_core(contrast_id,exclusion_list)
+```
+
+#### siNC_H4K20me3_vs_siSmyd3_H4K20me3
+```{r qc3, echo=FALSE, warning=FALSE, message=FALSE}
+exclusion_list=c()
+contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3"
+norm_type_cutandrun="broadGo_peaks"
+
+peak_anno_3=main_prep_qc_core(contrast_id,exclusion_list)
+```
+
+## **Data Processing**
+Reviewing counts of significant peaks guides analysis parameters downstream.
+
+```{r collapsedf, echo=FALSE, warning=FALSE, message=FALSE}
 #read gene list
-gene_list=read.csv(paste0(analysis_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
+gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
 
-#read in results file, add to df
-collapsed_df=data.frame()
-pi_df=data.frame()
-for (rowid in rownames(master_contrast_df)){
-  # set ids
-  sample_id=paste0(master_contrast_df[rowid,"sample_id"],extensions)
-  project_id=master_contrast_df[rowid,"project_id"]
-  print(paste0("--",sample_id))
-  
-  # set path
-  out_dir = paste0(analysis_dir,"/",project_id,"/r_analysis")
-  dir.create(file.path(out_dir), showWarnings = FALSE)
-  contrast_path=paste0(analysis_dir,project_id,contrast_subpath)
-  
-  # read in results
-  raw_df=read.csv(paste0(contrast_path,sample_id,"/",sample_id,"_",method,"based_diffresults.txt"),sep = "\t")
-  
-  # filter results for signifcant values
-  filt_df=subset(raw_df,pvalue<p_val_set)
-  filt_df=subset(filt_df,(log2FoldChange>=log2fc_set) | (log2FoldChange<=-log2fc_set))
+##########################################################################################
+# create significant gene lists
+contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3"
+norm_type_cutandrun="broadGo_peaks"
+merged_sig_df=create_sig_df(contrast_id,norm_type_cutandrun)
 
-  if (nrow(filt_df)>0){
-    #add metadata
-    filt_df$sample=strsplit(sample_id,"__")[[1]][1]
-    filt_df$dedup=strsplit(sample_id,"__")[[1]][2]
-    filt_df$type=strsplit(strsplit(sample_id,"__")[[1]][3],"[.]")[[1]][2]
-    filt_df$type=filt_df$type %>% replace(is.na(.),"narrowPeak")
-    filt_df$method=method
-    filt_df$total=nrow(filt_df)
-    filt_df$project=strsplit(project_id,"_")[[1]][1]
-    filt_df$uniqueid=paste0(filt_df$sample,"_",filt_df$dedup,"_",filt_df$type)
-    
-    print(paste0("----total number of significant peaks: ", nrow(filt_df)))
-    
-    # collapse to get shortAnno counts
-    tmp_collapsed=filt_df %>% dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid,project)
+contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3"
+norm_type_cutandrun="narrowGo_peaks"
+merged_sig_df=rbind(merged_sig_df,
+                        create_sig_df(contrast_id,norm_type_cutandrun))
 
-    # get counts for up/down
-    tmp_collapsed$up=0
-    tmp_collapsed$down=0
-    tmp_direction1=(subset(filt_df,log2FoldChange>0) %>%
-                      dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid,project))[,c("shortAnno","n")]
-    rownames(tmp_direction1)=tmp_direction1$shortAnno
-    tmp_direction2=(subset(filt_df,log2FoldChange<0) %>%
-                      dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid,project))[,c("shortAnno","n")]
-    rownames(tmp_direction2)=tmp_direction2$shortAnno
-    for (rowid2 in rownames(tmp_collapsed)){
-      tmp_collapsed[rowid2,"up"]=as.numeric(tmp_direction1[tmp_collapsed[rowid2,"shortAnno"],"n"])
-      tmp_collapsed[rowid2,"down"]=as.numeric(tmp_direction2[tmp_collapsed[rowid2,"shortAnno"],"n"])
-    }
-    tmp_collapsed[is.na(tmp_collapsed)] <- 0
+contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3"
+norm_type_cutandrun="broadGo_peaks"
+merged_sig_df=rbind(merged_sig_df,
+                        create_sig_df(contrast_id,norm_type_cutandrun))
 
-    # filter for PI genes
-    tmp_pi1=subset(filt_df,SYMBOL %in% subset(gene_list,Set=="REPRESSORS")$Mouse)
-    if(nrow(tmp_pi1)!=0){tmp_pi1$gene_list="REPRESSORS"}
-    
-    tmp_pi2=subset(filt_df,SYMBOL %in% subset(gene_list,Set=="ACCELERATORS")$Mouse)
-    if(nrow(tmp_pi2)!=0){tmp_pi2$gene_list="ACCELERATORS"}
-    
-    tmp_pi3=subset(filt_df,SYMBOL %in% subset(gene_list,Set=="INVASION")$Mouse)
-    if(nrow(tmp_pi3)!=0){tmp_pi3$gene_list="INVASION"}
-    
-    #calculate percentages
-    tmp_collapsed$perc=round((tmp_collapsed$n/tmp_collapsed$total)*100,2)
-    tmp_collapsed$perc_up=round((tmp_collapsed$up/sum(tmp_collapsed$up))*100,2)
-    tmp_collapsed$perc_down=round((tmp_collapsed$down/sum(tmp_collapsed$down))*100,2)
+# collapse counts
+collapsed_df=create_sig_collapsed_df(merged_sig_df)
 
-    #merge dfs
-    collapsed_df=rbind(collapsed_df,tmp_collapsed)
-    if(nrow(tmp_pi1)!=0){pi_df=rbind(pi_df,tmp_pi1)}
-    if(nrow(tmp_pi2)!=0){pi_df=rbind(pi_df,tmp_pi2)}
-    if(nrow(tmp_pi3)!=0){pi_df=rbind(pi_df,tmp_pi3)}
+##########################################################################################
+# create nonsignificant gene lists
+contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3"
+norm_type_cutandrun="broadGo_peaks"
+merged_nonsig_df=create_nonsig_df(contrast_id,norm_type_cutandrun)
 
-  } else{
-    print ("----there are no significant peaks")
-  }
-  
-  #cleanup
-  #remove(filt_df,raw_df,tmp_collapsed,tmp_pi1,tmp_pi2)
-}
+contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3"
+norm_type_cutandrun="narrowGo_peaks"
+merged_nonsig_df=rbind(merged_nonsig_df,
+                        create_nonsig_df(contrast_id,norm_type_cutandrun))
 
-# create samplename shorthands
-shorten_sample_id<-function(input_id){
-  output_id=gsub("_350K_0_35ng_0_25_HCHO_2m","",input_id)
-  output_id=gsub("_0.25HCHO_500K","",output_id)
-  output_id=gsub("MOC1_","",output_id)
-  output_id=gsub("_10","",output_id)
-  output_id=gsub("Smyd3_v","v",output_id)
-  output_id=gsub("_2_","_",output_id)
-  output_id=gsub("_CRISPR_","_",output_id)
-  #output_id=strsplit(output_id,"__")[[1]][1]
-  return(output_id)
-}
-collapsed_df$sample_sub = shorten_sample_id(collapsed_df$sample)
-pi_df$sample_sub = shorten_sample_id(pi_df$sample)
+contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3"
+norm_type_cutandrun="broadGo_peaks"
+merged_nonsig_df=rbind(merged_nonsig_df,
+                        create_nonsig_df(contrast_id,norm_type_cutandrun))
+# collapse counts
+collapsed_df=create_nonsig_collapsed_df(merged_nonsig_df)
 ```
 
-######################################################################
-## Question 1
-######################################################################
-##### 1) What is the genome-wide distribution pattern of H3K4me3 in HN-6 cells before and after siSMYD3 treatment (pie chart)?
+Review summary annotation for all peaks.
 
-```{r q1, echo=FALSE, warning=FALSE}
-# run function
-# sample_list=c("siNC_H3K4me3_vs_siSmyd3_H3K4me3")
-# for (contrast_id in sample_list){
-#   generate_piecharts_from_collapsed(contrast_id)
-# }
+### siNC_H3K27me3_vs_siSmyd3_H3K27me3
+
+```{r graphics1,echo=FALSE, warning=FALSE, message=FALSE}
+chipseeker_plots(peak_anno_1)
 ```
 
-######################################################################
-## Question 2
-######################################################################
-##### 2) Do we observe enrichment of H3K4me3 in the promoters/gene body regions of immune-related genes (please use GSEA IFNa and APM gene sets for interrogation) and how is this affected after SΜΥD3 knockdown?
+### siNC_H3K4me3_vs_siSmyd3_H3K4me3
 
-
-```{r q2, echo=FALSE, warning=FALSE}
-# run functions
-# sample_list=c("siNC_H3K4me3_vs_siSmyd3_H3K4me3")
-# for (contrast_id in sample_list){
-#   generate_piecharts_from_genelist(contrast_id)
-# }
+```{r graphics2,echo=FALSE, warning=FALSE, message=FALSE}
+chipseeker_plots(peak_anno_2)
 ```
 
-######################################################################
-## Question 3
-######################################################################
-##### 3) Generate volcano plot for H3K4me3 peaks and mark IFNa and APM genes on this volcano plot H4K20me3, H3K27me3 (repressive marks):
+### siNC_H4K20me3_vs_siSmyd3_H4K20me3
 
-######################################################################
-## Question 4
-######################################################################
-##### 4) What is the genome-wide distribution pattern of H4K20me3 and H3K27me3 in HN-6 cells before and after SMYD3 knockdown (pie chart)?
-
-```{r q4, echo=FALSE, warning=FALSE}
-# sample_list=c("siNC_H4K20me3_vs_siSmyd3_H4K20me3", "siNC_H3K27me3_vs_siSmyd3_H3K27me3")
-# for (contrast_id in sample_list){
-#   generate_piecharts_from_collapsed(contrast_id)
-# }
+```{r graphics3,echo=FALSE, warning=FALSE, message=FALSE}
+chipseeker_plots(peak_anno_3)
 ```
 
-######################################################################
-## Question 5
-######################################################################
-##### 5) Do we observe enrichment of H4K20me3, H3K27me3 in the promoters/gene body regions of immune-related genes (please use above datasets for interrogation) and how is this affected with SMYD3 knockdown?
 
-```{r q5, echo=FALSE, warning=FALSE}
-# run functions
-# sample_list=c("siNC_H4K20me3_vs_siSmyd3_H4K20me3", "siNC_H3K27me3_vs_siSmyd3_H3K27me3")
-# for (contrast_id in sample_list){
-#   generate_piecharts_from_genelist(contrast_id)
-# }
+## **Volcano Plots**
+
+Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
+
+### siNC_H3K27me3_vs_siSmyd3_H3K27me3 {.tabset}
+```{r, v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3"
+gene_list_name=c("APM","INFalpha")
+generate_volcano_plots(data_type="CAR",
+                       contrast_id,
+                       gene_list_in="ON")
 ```
 
-######################################################################
-## Question 6
-######################################################################
-##### 6) Generate volcano plot for H3K4me3 peaks and mark IFNa and APM genes on this volcano plot
-
-```{r q6, echo=FALSE, warning=FALSE}
-
+### siNC_H3K4me3_vs_siSmyd3_H3K4me3 {.tabset}
+```{r, v2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3"
+gene_list_name=c("APM","INFalpha")
+generate_volcano_plots(data_type="CAR",
+                       contrast_id,
+                       gene_list_in="ON")
 ```
 
-######################################################################
-## Question 7
-######################################################################
-7) Do we observe co-occupancy of promoters/gene body regions of immune-related genes for these histone marks? If so, how is this co-occupancy affected with SMYD3 knockdown?
-```{r q7, echo=FALSE, warning=FALSE}
-# gene_id_list=c("REPRESSORS","ACCELERATORS")
-# for (gene_id in gene_id_list){
-#   generate_heatmaps_contrasts(subset(pi_df,gene_list==gene_id),
-#                      paste0(gene_id," Genes"))
-# }
-```
-
-######################################################################
-## Question 8
-######################################################################
-##### 8) Correlate any changes observed in the deposition of any of the above histone marks on the promoters/gene bodies of immune-related genes with expression changes of these immune-related genes using the RNA seq dataset as per below.
-```{r q8, echo=FALSE, warning=FALSE}
-
+### siNC_H4K20me3_vs_siSmyd3_H4K20me3 {.tabset}
+```{r, v3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3"
+gene_list_name=c("APM","INFalpha")
+generate_volcano_plots(data_type="CAR",
+                       contrast_id,
+                       gene_list_in="ON")
 ```

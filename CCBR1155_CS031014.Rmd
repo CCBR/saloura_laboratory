@@ -21,11 +21,14 @@ This analysis report comparison two projects
 # project information
 ############################################################
 #paths
-parent_dir="~/../../Volumes/ccbr1155/"
-input_dir = "~/../../Volumes/ccbr1155/CS031014/"
-output_car_dir = "~/../../Volumes/ccbr1155/CS031014/r_analysis_221123/"
-car_subpath=paste0(input_dir,"carlisle_220920/results/peaks/contrasts/")
+parent_dir="~/../../Volumes/CUTRUN/"
+input_dir = "~/../../Volumes/CUTRUN/analysis/CS031014/"
+output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS031014/r_analysis_230118/"
+output_dir=output_car_dir
+car_subpath=paste0(input_dir,"carlisle_221206/results/peaks/contrasts/")
+img_dir=paste0(output_car_dir,"img/")
 dir.create(file.path(output_car_dir), showWarnings = FALSE)
+dir.create(file.path(img_dir), showWarnings = FALSE)
 cs_id="CS031014"
 ```
 
@@ -53,14 +56,14 @@ ignore_groups=c()
 
 ```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
 # package list
-list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb_pkg, "UpSetR","ggupset","ggimage")
+list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb_pkg, "UpSetR","ggupset","ggimage","ggpubr","plyr")
 
 #install as needed
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) BiocManager::install(new.packages)
 
 # source functions
-source('CAR_core_functions.R')
+source(paste0(parent_dir,'github/CAR_core_functions.R'))
 
 # load packages
 invisible(lapply(list.of.packages, library, character.only = TRUE))
@@ -141,19 +144,33 @@ Reviewing counts of significant peaks guides analysis parameters downstream.
 #read gene list
 gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
 
+##########################################################################################
 # create significant gene lists
 contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
 norm_type_cutandrun="narrowGo_peaks"
-merged_sig_df=create_sig_df(contrast_id)
+merged_sig_df=create_sig_df(contrast_id,norm_type_cutandrun)
 
 contrast_id="53_H4K20m3_vs_HN6_H4K20me3"
 norm_type_cutandrun="broadGo_peaks"
 merged_sig_df=rbind(merged_sig_df,
-                        create_sig_df(contrast_id))
+                        create_sig_df(contrast_id,norm_type_cutandrun))
 
 # collapse counts
-collapsed_df=create_collapsed_df(merged_sig_df)
-collapsed_pi_df=create_collapsed_pi_df(merged_sig_df)
+collapsed_df=create_sig_collapsed_df(merged_sig_df)
+
+##########################################################################################
+# create nonsignificant gene lists
+contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
+norm_type_cutandrun="narrowGo_peaks"
+merged_nonsig_df=create_nonsig_df(contrast_id,norm_type_cutandrun)
+
+contrast_id="53_H4K20m3_vs_HN6_H4K20me3"
+norm_type_cutandrun="broadGo_peaks"
+merged_nonsig_df=rbind(merged_nonsig_df,
+                        create_nonsig_df(contrast_id,norm_type_cutandrun))
+
+# collapse counts
+collapsed_df=create_nonsig_collapsed_df(merged_nonsig_df)
 ```
 
 Review summary annotation for all peaks.
@@ -177,11 +194,37 @@ Volcano plots are created to show the statistical significance (FDR) versus magn
 ### 53_H3K4me3_vs_HN6_H3K4me3 {.tabset}
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
-generate_volcano_plots(contrast_id,gene_list_in="OFF")
+generate_volcano_plots(data_type="CAR",
+                       contrast_id,
+                       gene_list_in="OFF")
 ```
 
 ### 53_H4K20m3_vs_HN6_H4K20me3 {.tabset}
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 contrast_id="53_H4K20m3_vs_HN6_H4K20me3"
-generate_volcano_plots(contrast_id,gene_list_in="OFF")
+generate_volcano_plots(data_type="CAR",
+                       contrast_id,
+                       gene_list_in="OFF")
 ```
+
+
+## *Intensity Boxplots*
+```{r}
+contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
+sample_list=c("HN6_H3K4me3_1","HN6_H3K4me3_2","HN6_H3K4me3_3",
+              "53_H3K4me3_1","53_H3K4me3_2","53_H3K4me3_3")
+color_pal=c("black","black","black","blue","blue","blue")
+generate_intensity_boxplot(contrast_id,
+                           sample_list,
+                           color_pal=color_pal)
+
+contrast_id="53_H3K4me3_vs_HN6_H3K4me3"
+sample_list=c("HN6_H3K4me3_2",
+              "53_H3K4me3_3")
+color_pal=c("black","blue")
+generate_intensity_boxplot(contrast_id,
+                           sample_list,
+                           color_pal=color_pal)
+
+```
+

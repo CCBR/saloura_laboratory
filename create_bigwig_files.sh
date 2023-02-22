@@ -2,15 +2,30 @@
 #https://research.stowers.org/cws/CompGenomics/Tutorial/bam2bigwig.html
 
 module load samtools bedtools ucsc
-reference="hg38"
-frag_length_filter="1000"
-project_id="CS029689"
-output_dir="/data/CCBR/projects/ccbr1155/$project_id/bigwig"
+project_id=$1
+
 pipeliner_dir="/data/CCBR/projects/ccbr1155/$project_id/pipeliner_220919"
 
 track_dir="/data/CCBR/datashare/ccbr1155/${project_id}/bigwig"
 track_info="$output_dir/track_info.txt"
 
+if [ $project_id == "CS028891" ]; then
+    dir_loc="pipeliner_220713"
+    reference="hg38"
+    deg_list=("CRISPR_53_with_IFNb-parental_HN6_with_IFNb" "CRISPR_53_without_IFN-bparental_HN6_without_IFNb" "CRISPR_52_with_IFNb-parental_HN6_with_IFNb" "CRISPR_52_without_IFNb-parental_HN6_without_IFNb")
+fi
+
+frag_length_filter="1000"
+
+# set dirs
+output_dir="/data/CUTRUN/analysis/$project_id/bigwig"
+project_dir="/data/CUTRUN/analysis/$project_id"
+pipeliner_dir=$project_dir/$dir_loc
+
+track_dir="/data/CUTRUN/datashare/CCBR/${project_id}/bigwig"
+track_info="$project_dir/track_info.txt"
+
+# create dirs
 if [[ ! -d $output_dir ]]; then mkdir -p $output_dir; fi
 if [[ ! -d $track_dir ]]; then mkdir -p $track_dir; fi
 if [[ ! -f $track_info ]]; then touch $track_info; fi
@@ -35,11 +50,14 @@ else
     echo "Length file was already created"
 fi
 
+############################################################################################################
+# run sample 
+############################################################################################################
 # create bigwig files, track files
-sample_list=("5-3_H3K4me3_IFNb_1" "5-3_H3K4me3_IFNb_2" "5-3_H3K4me3_IFNb_3" "5-3_H3K9me3_IFNb_1""5-3_H3K9me3_IFNb_2" "5-3_H3K9me3_IFNb_3" "HN6_H3K4me3_IFNb_1" "HN6_H3K4me3_IFNb_2" "HN6_H3K4me3_IFNb_3" "HN6_H3K9me3_IFNb_1" "HN6_H3K9me3_IFNb_2" "HN6_H3K9me3_IFNb_3" "HN6_IgG_rabbit_negative_control_1")
+sample_list="samples_list.txt"
+IFS=$'\n' read -d '' -r -a sample_list < "$project_dir/$sample_list"
 for sample_id in ${sample_list[@]}; do
     echo "--$sample_id"
-    #input_bam="$pipeliner_dir/bams/$sample_id.p2.Aligned.toTranscriptome.out.bam"
     input_bam="$pipeliner_dir/bams/$sample_id.star_rg_added.sorted.dmark"
     sorted_bam="$output_dir/$sample_id.si.bam"
     
@@ -91,16 +109,35 @@ for sample_id in ${sample_list[@]}; do
     #create hard links
     if [[ ! -f $link_loc ]]; then
         echo "----creating links"
-        echo "track type=bigWig bigDataUrl=https://hpc.nih.gov/~CCBR/ccbr1155/${project_id}/bigwig/${sample_id}.bigwig name=${sample_id} description=${sample_id} visibility=full autoScale=off maxHeightPixels=128:30:1 viewLimits=1:120 color=65,105,225" >> $track_info
+        echo "track type=bigWig bigDataUrl=https://hpc.nih.gov/~CUTRUN/CCBR/${project_id}/bigwig/${sample_id}.bigwig name=${sample_id} description=${sample_id} visibility=full autoScale=off maxHeightPixels=128:30:1 viewLimits=1:120 color=65,105,225" >> $track_info
         ln $bw $link_loc
     fi
 done
 
+############################################################################################################
+# run contrasts
+############################################################################################################
+run_comparison_tracks (){
+    peak_type=$1
+    method_type=$2
+    dedup_type=$3
+    sample_id=$4
+    
+    # sample name
+    # eg siSmyd3_2m_Smyd3_0.25HCHO_500K_vs_siNC_2m_Smyd3_0.25HCHO_500K__no_dedup__norm.relaxed
+    complete_sample_id="DEG_${sample_id}_0.5_0.5"
+    
+    #create hard links
+    source_loc="${analysis_dir}/peaks/contrasts/${complete_sample_id}/${complete_sample_id}_fragmentsbased_diffresults.bigbed "
+    link_loc="${track_dir}/bigbed/${complete_sample_id}_fragmentsbased_diffresults.bigbed"
+    if [[ ! -f $link_loc ]]; then ln $source_loc $link_loc; fi
+
+    # echo track info
+    echo "track name=${sample_id}_${peak_type} bigDataUrl=https://hpc.nih.gov/~CUTRUN/CCBR/${project_id}/bigbed/${complete_sample_id}_fragmentsbased_diffresults.bigbed type=bigBed itemRgb=On" >> $track_info
+}
+
+# for sample_id in ${deg_list[@]}; do
+#     run_comparison_tracks $sample_id
+# done
 # change permissions
-chmod -R 777 /data/CCBR/datashare/ccbr1155/$project_id/
-
-# cat track info
-cat $track_info
-
-
-#echo "track type=bigWig bigDataUrl=https://hpc.nih.gov/~CCBR/ccbr1155/${project_id}/bigwig/${sample_id}.bigwig name=${sample_id} description=${sample_id} visibility=full autoScale=off maxHeightPixels=128:30:1 viewLimits=1:120 color=65,105,225" >> $track_info
+chmod -R 777 $track_dir

@@ -1,20 +1,43 @@
 ---
-title: "CCBR1155 CS031308 CUT&RUN Analysis"
+title: "CCBR1155 CS033351 CUT&RUN Analysis"
 author: "Samantha Sevilla"
 date: "`r Sys.Date()`"
 output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+# Background
+######################################################################
 ## Project info
-This analysis report comparison two projects
+######################################################################
+This analysis report includes:
 
 | CS ID | Type | Species | CCBR | Notes | 
 | -- | -- | -- | -- | -- |
-| CS031308 | Cut and Run | Hg38 | 1155 |  |
+| CS033351 | Cut and Run | Hg38 | 1155 |  |
 
-## Links
-- [CS031308](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chrX%3A15560138%2D15602945&hgsid=138221_o1QIpBNTM192Enh9AL7oIjMgpc7E)
+######################################################################
+## Links to Tracks
+######################################################################
+USBC Genome Tracks were created for each project. They can be accessed here:
+
+- [CS033351](https://hpcnihapps.cit.nih.gov/genome/cgi-bin/hgTracks?db=hg38&lastVirtModeType=default&lastVirtModeExtraState=&virtModeType=default&virtMode=0&nonVirtPosition=&position=chr14%3A37589552%2D37595249&hgsid=138465_n0aQkE0ISyBdKa6Mueyvwz2kLbwa)
+
+# Analysis
+######################################################################
+## Notes
+######################################################################
+- Deduplicated peaks were identified, using the following parameters:
+
+  - fragments based method
+  
+  - normalized, relaxed method
+  
+- Peaks were then annotated with gene ID's. 
+
+  - Comparisons including ALL genes include the corresponding gene of any signficant peaks identified (p value <0.05, fc +/- 1.5)
+  
+  - Peak annotations were stratified into those that were over represented, as well as those under-represented between each comparison. For example peakID chr1:100099186-100105441 had the following average counts for these two samples:	CRISPR_NC_2_Smyd3 (~65,287) and CRISPR_KO_10_Smyd3 (~349,940). The log2FoldChange between these two samples is approximately -2.29. The comparison CRISPR_NC_Smyd3_vs_KO_Smyd3 with a -2.29 log2FC would indicate that there is an UNDER-representation in CRISPR_NC_2_Smyd3 as compared to CRISPR_KO_10_Smyd3 for this gene ID (Cntnap5b).
 
 ```{r paths_lists, echo=FALSE, warning=FALSE, include=FALSE}
 ############################################################
@@ -22,14 +45,14 @@ This analysis report comparison two projects
 ############################################################
 #paths
 parent_dir="~/../../Volumes/CUTRUN/"
-input_dir = "~/../../Volumes/CUTRUN/analysis/CS031308/"
-output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS031308/r_analysis_221226/"
+input_dir = "~/../../Volumes/CUTRUN/analysis/CS033351/"
+output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS033351/r_analysis_230104/"
 output_dir=output_car_dir
-car_subpath=paste0(input_dir,"carlisle_221226/results/peaks/contrasts/")
-img_dir=paste0(output_car_dir,"img/")
+car_subpath=paste0(input_dir,"carlisle_221231/results/peaks/contrasts/")
+output_pic_dir=paste0(output_car_dir,"img")
 dir.create(file.path(output_car_dir), showWarnings = FALSE)
-dir.create(file.path(img_dir), showWarnings = FALSE)
-cs_id="CS031308"
+dir.create(file.path(output_pic_dir), showWarnings = FALSE)
+cs_id="CS033351"
 ```
 
 ```{r user_params}
@@ -89,8 +112,8 @@ colnames(groups_df) = c("sampleid","group")
 rownames(groups_df)=groups_df$sampleid
 
 ## if there is a subset gene list, select files
-gene_file = paste0(parent_dir,"docs/gene_list_master.csv")
-gene_df = read.csv(gene_file)
+gene_file = paste0(parent_dir,"docs/merged_gene_list_v2.csv")
+pi_gene_df = read.csv(gene_file)
 
 # read in the contrast list
 contrast_df=read.csv(paste0(input_dir,"contrasts.tsv"),sep="\t")
@@ -119,144 +142,109 @@ Reviewing sample QC allows us to determine if there are outliers present in anal
 
 ## Quality Control  {.tabset}
 
-#### 53_INFB_SMYD3_vs_HN6_INFB_SMYD3
+#### HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min
 ```{r qc1, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c("53_INFB_SMYD3_3")
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+exclusion_list=c()
+contrast_id="HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min"
 norm_type_cutandrun="narrowGo_peaks"
 
 peak_anno_1=main_prep_qc_core(contrast_id,exclusion_list)
 ```
 
-#### 53_INFB_UHRF1_vs_HN6_INFB_UHRF1
+#### HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min
 ```{r qc2, echo=FALSE, warning=FALSE, message=FALSE}
 exclusion_list=c()
-contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
+contrast_id="HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min"
+norm_type_cutandrun="broadGo_peaks"
+
+peak_anno_1=main_prep_qc_core(contrast_id,exclusion_list)
+```
+
+#### HA_Mock_IFNb_antiHA_2min_vs_HA_UHRF1_IFNb_antiHA_2min
+```{r qc3, echo=FALSE, warning=FALSE, message=FALSE}
+exclusion_list=c()
+contrast_id="HA_Mock_IFNb_antiHA_2min_vs_HA_UHRF1_IFNb_antiHA_2min"
 norm_type_cutandrun="narrowGo_peaks"
 
 peak_anno_2=main_prep_qc_core(contrast_id,exclusion_list)
 ```
 
-#### 53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3
-```{r qc3, echo=FALSE, warning=FALSE, message=FALSE}
+#### HA_Mock_IFNb_antiHA_2min_vs_HA_UHRF1_IFNb_antiHA_2min
+```{r qc4, echo=FALSE, warning=FALSE, message=FALSE}
 exclusion_list=c()
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
- 
-peak_anno_3=main_prep_qc_core(contrast_id,exclusion_list)
+contrast_id="HA_Mock_IFNb_antiHA_2min_vs_HA_UHRF1_IFNb_antiHA_2min"
+norm_type_cutandrun="broadGo_peaks"
+
+peak_anno_2=main_prep_qc_core(contrast_id,exclusion_list)
 ```
 
 ## **Data Processing**
 Reviewing counts of significant peaks guides analysis parameters downstream.
 
 ```{r collapsedf, echo=FALSE, warning=FALSE, message=FALSE}
-# create significant gene lists
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
-merged_sig_df=create_sig_df(contrast_id,norm_type_cutandrun)
-
-contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
-norm_type_cutandrun="narrowGo_peaks"
-merged_sig_df=rbind(merged_sig_df,
-                        create_sig_df(contrast_id,norm_type_cutandrun))
-
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
-merged_sig_df=rbind(merged_sig_df,
-                        create_sig_df(contrast_id,norm_type_cutandrun))
-# collapse counts
-collapsed_df=create_sig_collapsed_df(merged_sig_df)
+#read gene list
+gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
 
 ##########################################################################################
-# create nonsignificant gene lists
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+# create significant gene lists
+contrast_id="HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min"
+norm_type_cutandrun="broadGo_peaks"
+merged_sig_df=create_sig_df(contrast_id,norm_type_cutandrun)
+
+contrast_id="HA_Mock_IFNb_antiHA_2min_vs_HA_UHRF1_IFNb_antiHA_2min"
 norm_type_cutandrun="narrowGo_peaks"
+merged_sig_df=rbind(merged_sig_df,
+                        create_sig_df(contrast_id,norm_type_cutandrun))
+
+# collapse counts
+if (nrow(merged_sig_df)>0){
+  collapsed_df=create_sig_collapsed_df(merged_sig_df)
+}
+##########################################################################################
+# create nonsignificant gene lists
+contrast_id="HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min"
+norm_type_cutandrun="broadGo_peaks"
 merged_nonsig_df=create_nonsig_df(contrast_id,norm_type_cutandrun)
 
-contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
-norm_type_cutandrun="narrowGo_peaks"
-merged_nonsig_df=rbind(merged_nonsig_df,
-                        create_nonsig_df(contrast_id,norm_type_cutandrun))
-
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
+contrast_id="HA_Mock_IFNb_antiHA_2min_vs_HA_UHRF1_IFNb_antiHA_2min"
 norm_type_cutandrun="narrowGo_peaks"
 merged_nonsig_df=rbind(merged_nonsig_df,
                         create_nonsig_df(contrast_id,norm_type_cutandrun))
 
 # collapse counts
 collapsed_df=create_nonsig_collapsed_df(merged_nonsig_df)
-
 ```
 
 Review summary annotation for all peaks.
 
-### 53_INFB_SMYD3_vs_HN6_INFB_SMYD3
+### HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min
+
 ```{r graphics1,echo=FALSE, warning=FALSE, message=FALSE}
 chipseeker_plots(peak_anno_1)
 ```
 
-### 53_INFB_UHRF1_vs_HN6_INFB_UHRF1
+### HA_UHRF1_IFNb_antiHA_2min_vs_HA_Mock_IFNb_antiHA_2min
+
 ```{r graphics2,echo=FALSE, warning=FALSE, message=FALSE}
 chipseeker_plots(peak_anno_2)
 ```
 
-### 53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3
-```{r graphics3,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_3)
-```
 ## **Volcano Plots**
 
 Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
 
-### 53_INFB_SMYD3_vs_HN6_INFB_SMYD3 {.tabset}
-```{r v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-gene_list_name=c("APM","INFalpha")
+### HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min {.tabset}
+```{r, v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+contrast_id="HA_Mock_IFNb_antiHA_1min_vs_HA_UHRF1_IFNb_antiHA_1min"
 generate_volcano_plots(data_type="CAR",
                        contrast_id,
-                       gene_list_in="ON")
+                       gene_list_in="OFF")
 ```
 
-### 53_INFB_UHRF1_vs_HN6_INFB_UHRF1 {.tabset}
-```{r v2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
-gene_list_name=c("APM","INFalpha")
+### HA_UHRF1_IFNb_antiHA_2min_vs_HA_Mock_IFNb_antiHA_2min {.tabset}
+```{r, v2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+contrast_id="HA_UHRF1_IFNb_antiHA_2min_vs_HA_Mock_IFNb_antiHA_2min"
 generate_volcano_plots(data_type="CAR",
                        contrast_id,
-                       gene_list_in="ON")
-```
-
-### 53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3 {.tabset}
-```{r v3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-gene_list_name=c("APM","INFalpha")
-generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
-```
-
-## *Intensity Boxplots*
-```{r}
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-sample_list=c("HN6_INFB_SMYD3_1","HN6_INFB_SMYD3_2","HN6_INFB_SMYD3_3",
-              "53_INFB_SMYD3_1","53_INFB_SMYD3_2","53_INFB_SMYD3_3")
-color_pal=c("black","black","black","blue","blue","blue")
-generate_intensity_boxplot(contrast_id,
-                           sample_list,
-                           color_pal=color_pal)
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-sample_list=c("HN6_INFB_SMYD3_1",
-              "53_INFB_SMYD3_1")
-color_pal=c("black","blue")
-generate_intensity_boxplot(contrast_id,
-                           sample_list,
-                           color_pal=color_pal)
-
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-sample_list=c("HN6_no_INFB_SMYD3_2",
-              "53_no_INFB_SMYD3_2")
-color_pal=c("black","blue")
-generate_intensity_boxplot(contrast_id,
-                           sample_list,
-                           color_pal=color_pal)
+                       gene_list_in="OFF")
 ```

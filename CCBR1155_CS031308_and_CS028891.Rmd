@@ -25,16 +25,18 @@ This analysis report comparison two projects
 # project information
 ############################################################
 #paths
-parent_dir="~/../../Volumes/ccbr1155/"
-input_car_dir = "~/../../Volumes/ccbr1155/CS031308/"
+parent_dir="~/../../Volumes/CUTRUN/"
+input_car_dir = "~/../../Volumes/CUTRUN/analysis/CS031308/"
 car_subpath=paste0(input_car_dir,"carlisle_221116/results/peaks/contrasts/")
-output_car_dir=paste0(input_car_dir,"r_analysis_221116/")
+output_car_dir=paste0(input_car_dir,"r_analysis_221226/")
 
-input_rna_dir= "~/../../Volumes/ccbr1155/CS028891/"
-output_rna_dir=paste0(input_rna_dir,"r_analysis_220822/")
+input_rna_dir= "~/../../Volumes/CUTRUN/analysis/CS028891/"
+output_rna_dir=paste0(input_rna_dir,"r_analysis_221223/")
 
-output_dir = "~/../../Volumes/ccbr1155/CS031308_CS028891_complete/r_analysis_221129/"
+output_dir = "~/../../Volumes/CUTRUN/analysis/CS031308_CS028891_complete/r_analysis_221226/"
+img_dir = paste0(output_dir,"img/")
 dir.create(file.path(output_dir), showWarnings = FALSE)
+dir.create(file.path(img_dir), showWarnings = FALSE)
 ```
 
 ```{r user_params}
@@ -49,7 +51,6 @@ minSize_gene_set=15
 cs_id="CS031308"
 
 dedup_status="dedup"
-norm_type_cutandrun="narrowGo_peaks"
 method="fragments"
 
 #http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
@@ -87,7 +88,7 @@ new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"
 if(length(new.packages)) BiocManager::install(new.packages)
 
 # source functions
-source('CAR_core_functions.R')
+source(paste0(parent_dir,'github/CAR_core_functions.R'))
 
 # load packages
 invisible(lapply(list.of.packages, library, character.only = TRUE))
@@ -118,6 +119,7 @@ The genomic region of the peak is reported in annotation column using [ChIPseeke
 ```{r q1, warning=FALSE, echo=FALSE}
 # run function
 contrast_id=c("53_INFB_SMYD3_vs_HN6_INFB_SMYD3")
+main_piecharts_from_collapsed_nonsig(contrast_id)
 main_piecharts_from_collapsed_secondary(contrast_id)
 ```
 
@@ -128,7 +130,6 @@ contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
 
 contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
 main_differential_genes(contrast_id,contrast_list)
-# diff_genes_53_INFB_SMYD3_vs_HN6_INFB_SMYD3.csv
 ```
 
 ### Question 3
@@ -179,8 +180,8 @@ main_differential_overlap(subset_list=gene_bodies_list,
 *5) Do SMYD3 and H4K20me3 co-occupy genes and if so, which ones?*
 ```{r q5}
 contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
-contrast_id_car1="~/../../Volumes/ccbr1155/CS031308/r_analysis_221116/"
-contrast_id_car2="~/../../Volumes/ccbr1155/CS031014/r_analysis_221123/"
+contrast_id_car1="~/../../Volumes/CUTRUN/analysis/CS031308/r_analysis_221226/"
+contrast_id_car2="~/../../Volumes/CUTRUN/analysis/CS031014/r_analysis_221223/"
 cs_id1="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
 cs_id2="53_H4K20m3_vs_HN6_H4K20me3"
 
@@ -192,11 +193,11 @@ main_differential_overlap_car_to_car(contrast_list=contrast_list,
 
 ```
 
-*5) Do SMYD3 and H3K4me3 co-occupy genes and if so, which ones?*
-```{r q5}
+*6) Do SMYD3 and H3K4me3 co-occupy genes and if so, which ones?*
+```{r q6}
 contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
-contrast_id_car1="~/../../Volumes/ccbr1155/CS031308/r_analysis_221116/"
-contrast_id_car2="~/../../Volumes/ccbr1155/CS031014/r_analysis_221123/"
+contrast_id_car1="~/../../Volumes/CUTRUN/analysis/CS031308/r_analysis_221226/"
+contrast_id_car2="~/../../Volumes/CUTRUN/analysis/CS031014/r_analysis_221223/"
 cs_id1="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
 cs_id2="53_H3K4me3_vs_HN6_H3K4me3"
 
@@ -270,10 +271,125 @@ contrast_id="CRISPR_53_without_IFNb-parental_HN6_without_IFNb"
 generate_volcano_plots("RNA",contrast_id,gene_list_in="ON")
 ```
 
-##############################################################################################################
-### Question 10
-*10)Generate boxplots of ChIP seq intensity for H3K4me3 peaks within promoters or gene body regions.*
+########################
+### Question 1
+*1)If peaks are detected, what is the genome wide distribution of UHRF1 (at baseline HN-6) and does it change with SMYD3 KO?*
+```{r q1, warning=FALSE, echo=FALSE}
+# run function
+contrast_id=c("53_INFB_UHRF1_vs_HN6_INFB_UHRF1")
+main_piecharts_from_collapsed_nonsig(contrast_id)
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+
+### Question 2
+*2)If peaks are detected, does UHRF1 occupy promoters/gene bodies of type I IFN response and APM genes, and is this occupancy lost with SMYD3 KO?*
+
 ```{r}
-contrast_id=c("53_INFB_SMYD3_vs_HN6_INFB_SMYD3")
-generate_intensity_boxplot(contrast_id)
+
+```
+
+################################################################################################
+### Question 1
+*1) What is the genome-wide distribution pattern of SMYD3 in HN-6 cells and how does this change after SMYD3 KO (ie in 5-3 cells compared to HN-6) (pie chart)?*
+```{r q1, warning=FALSE, echo=FALSE}
+# run function
+contrast_id=c("53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3")
+main_piecharts_from_collapsed_nonsig(contrast_id)
+main_piecharts_from_collapsed_secondary(contrast_id)
+```
+
+### Question 2
+*2)If peaks are detected, does UHRF1 occupy promoters/gene bodies of type I IFN response and APM genes, and is this occupancy lost with SMYD3 KO?*
+
+```{r}
+contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
+
+contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+main_differential_genes(contrast_id,contrast_list)
+```
+
+### Question 3
+*3) Heatmap of the above list of genes (increased peaks, decreased peaks).*
+```{r q3, warning=FALSE, echo=FALSE}
+contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
+fshort="promoter_intron_exon_3UTR_5UTR"
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+generate_heat_map_differential(contrast_id,n_up=3,n_down=48,fshort) #3; 47
+```
+
+### Question 4
+*4A) Of the decreasing SMYD3 peaks annotated to promoters/gene bodies of genes, what is the overlap with genes differentially downregulated (by 30% or more) on the RNA-seq database?*
+```{r q4down, warning=FALSE, echo=FALSE}
+contrast_id_car="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
+contrast_id_rna="CRISPR_53_without_IFNb-parental_HN6_without_IFNb"
+
+# run genebodies, down
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+fshort=paste0("genebodies_down")
+main_differential_overlap(subset_list=gene_bodies_list,
+                          rna_regulation="down",
+                          car_regulation="down")
+```
+
+*4B) Of the decreasing SMYD3 peaks annotated to promoters/gene bodies of genes, what is the overlap with genes differentially upregulated (by 30% or more) on the RNA-seq database? *
+
+```{r q4up, warning=FALSE, echo=FALSE}
+contrast_id_car="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
+contrast_id_rna="CRISPR_53_without_IFNb-parental_HN6_without_IFNb"
+
+# run genebodies, up
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+fshort=paste0("genebodies_up")
+main_differential_overlap(subset_list=gene_bodies_list,
+                          rna_regulation="up",
+                          car_regulation="up")
+```
+
+*5) Do SMYD3 and H4K20me3 co-occupy genes and if so, which ones?*
+```{r q5}
+contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+contrast_id_car1="~/../../Volumes/CUTRUN/analysis/CS031308/r_analysis_221116/"
+contrast_id_car2="~/../../Volumes/CUTRUN/analysis/CS031014/r_analysis_221123/"
+cs_id1="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
+cs_id2="53_H4K20m3_vs_HN6_H4K20me3"
+
+main_differential_overlap_car_to_car(contrast_list=contrast_list,
+                                     contrast_id_car1=contrast_id_car1,
+                                     contrast_id_car2=contrast_id_car2,
+                                     cs_id1=cs_id1,
+                                     cs_id2=cs_id2)
+
+```
+
+*5) Do SMYD3 and H3K4me3 co-occupy genes and if so, which ones?*
+```{r q5}
+contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+contrast_id_car1="~/../../Volumes/CUTRUN/analysis/CS031308/r_analysis_221116/"
+contrast_id_car2="~/../../Volumes/CUTRUN/analysis/CS031014/r_analysis_221123/"
+cs_id1="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
+cs_id2="53_H3K4me3_vs_HN6_H3K4me3"
+
+main_differential_overlap_car_to_car(contrast_list=contrast_list,
+                                     contrast_id_car1=contrast_id_car1,
+                                     contrast_id_car2=contrast_id_car2,
+                                     cs_id1=cs_id1,
+                                     cs_id2=cs_id2)
+
+```
+
+
+### Question 7
+*7a) Overlap of differential SMYD3 peaks localized on promoters/gene bodies with type I IFN response.*
+```{r q7a}
+main_piecharts_from_genelist(contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3",
+                             gene_list=gene_df_infa$Human,
+                             gene_list_name="inf_alpha_genes",
+                             process_type="car_car")
+
+main_piecharts_from_genelist(contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3",
+                             gene_list=gene_df_infa$Human,
+                             gene_list_name="inf_alpha_genes",
+                             process_type="single")
+
 ```

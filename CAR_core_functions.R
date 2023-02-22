@@ -7,6 +7,96 @@ shorten_names<-function(list_in){
   return(shortened_names)
 }
 
+################################################################################
+# manual annotation
+################################################################################
+## only for project CS029758 with sample 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb
+fix_annotations<-function(pa,peak_to_swap,EID,SYMBOL,ANNO,GENENAME){
+  tmp_row=subset(pa,peakID==peak_to_swap)
+  tmp_row$ENSEMBL=EID
+  tmp_row$SYMBOL=SYMBOL
+  tmp_row$shortAnno=ANNO
+  tmp_row$GENENAME=GENENAME
+  pa[rownames(tmp_row),]=tmp_row
+  return(pa)
+}
+
+fix_annotations_main<-function(input_df){
+  # CMPK2 – being assigned to NRIR’s promoter
+  ##https://www.ncbi.nlm.nih.gov/gene/129607
+  input_df=fix_annotations(input_df,
+                           peak_to_swap="chr2:6840000-6852000",
+                           EID="ENSG00000134326",
+                           SYMBOL="CMPK2",
+                           ANNO="Promoter",
+                           GENENAME="cytidine/uridine monophosphate kinase 2")
+  
+  # TRIM5 – being assigned to TRIM22’s promoter
+  ## https://www.ncbi.nlm.nih.gov/gene/85363
+  input_df=fix_annotations(input_df,
+                           peak_to_swap ="chr11:5679000-5693000",
+                           EID="ENSG00000132256",
+                           SYMBOL="TRIM5",
+                           ANNO="Promoter",
+                           GENENAME="tripartite motif containing 5")
+  
+  # LPAR6 - being assigned to 5’UTR of RB1
+  ## https://www.ncbi.nlm.nih.gov/gene/10161
+  input_df=fix_annotations(input_df,
+                           peak_to_swap="chr13:48412000-48432000",
+                           EID="ENSG00000139679",
+                           SYMBOL="LPAR6",
+                           ANNO="Intron",
+                           GENENAME="lysophosphatidic acid receptor 6")
+  
+  # SAMD9L – being assigned to the promoter of SAMD9
+  ## https://www.ncbi.nlm.nih.gov/gene/219285
+  input_df=fix_annotations(input_df,
+                           peak_to_swap="chr7:93097000-93179000",
+                           EID="ENSG00000177409",
+                           SYMBOL="SAMD9L",
+                           ANNO="Promoter",
+                           GENENAME="sterile alpha motif domain containing 9 like")
+  
+  # IFI44  – being assigned to the  of IFI44L
+  ## https://www.ncbi.nlm.nih.gov/gene/10561
+  input_df=fix_annotations(input_df,
+                           peak_to_swap="chr1:78606000-78672000",
+                           EID="ENSG00000137965",
+                           SYMBOL="IFI44",
+                           ANNO="Promoter",
+                           GENENAME="interferon induced protein 44")
+  
+  #  HLA-G	– being assigned to the 5' UTR of HCP5B
+  ## https://www.ncbi.nlm.nih.gov/gene/3135
+  input_df=fix_annotations(input_df,
+                           peak_to_swap="chr6:29824000-29832000",
+                           EID="ENSG00000204632",
+                           SYMBOL="HLA-G",
+                           ANNO="Promoter",
+                           GENENAME="major histocompatibility complex, class I, G")
+  
+  #  HLA-A – being assigned to the Exon of HCP5B
+  ## https://www.ncbi.nlm.nih.gov/gene/3105
+  input_df=fix_annotations(input_df,
+                           peak_to_swap="chr6:29932000-29941000",
+                           EID="ENSG00000206503",
+                           SYMBOL="HLA-A",
+                           ANNO="Promoter",
+                           GENENAME="major histocompatibility complex, class I, A")
+
+  # RFX5 – being assigned to the promoter of RFX5-AS1
+  ## https://www.ncbi.nlm.nih.gov/gene/5993
+  input_df=fix_annotations(input_df,
+                           peak_to_swap="chr1:151346000-151356000",
+                           EID="ENSG00000143390",
+                           SYMBOL="RFX5",
+                           ANNO="Intron",
+                           GENENAME="regulatory factor X5")
+  
+  return(input_df)
+}
+
 ############################################################
 # QC Analysis
 ############################################################
@@ -63,7 +153,7 @@ generate_RLE_plot<-function(condition1,condition2,input_data,input_title){
   mtext(input_title, side=2, outer=TRUE, adj=0)  
 }
 
-generate_boxplots<-function(sampleinfo,filtered){
+generate_boxplots<-function(sampleinfo,filtered,contrast_id){
   #set lib
   #determine lib reduction factor
   if (mean(colSums(filtered))>10000000){
@@ -81,15 +171,18 @@ generate_boxplots<-function(sampleinfo,filtered){
   } else {
     lib_factor=1e1
   }
-  print(paste0("the lib",lib_factor," ",mean(colSums(filtered))))
+  print(paste0("the libfactor is ",lib_factor," ",mean(colSums(filtered))))
   
   # filter
-  sampleinfo=sampleinfo[sampleinfo$sampleid==colnames(filtered),]
+  sampleinfo=sampleinfo[sampleinfo$sampleid %in% colnames(filtered),]
   sampleinfo$library_size=colSums(filtered)/lib_factor
   sampleinfodf = as.data.frame(sampleinfo)
   sampleinfodf$dupstatus = dedup_status
   rownames(sampleinfo) = sampleinfo$sampleid
   pander(sampleinfodf,style="rmarkdown")
+
+  file_name=paste0(output_dir,contrast_id,"_library_size.csv")
+  write.csv(sampleinfodf,file_name)
   
   # melt data
   rawcounts_logcpm = log2(cpm(filtered))
@@ -193,15 +286,27 @@ peak_annotation<-function(result_dds,contrast_id){
   pa$shortAnno[pa$shortAnno=="3'"]="3'UTR"
   pa$peakID = paste0(pa$seqnames,":",pa$start,"-",pa$end)
   
+  # perform manual change of annotations due to viewing on tracks
+  ## only for project CS029758 with sample 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb
+  if (cs_id=="CS029758" && contrast_id=="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"){
+    pa = fix_annotations_main(pa)
+  }
+  
   fpath=paste0(output_car_dir,"peak_annotation_",contrast_id,".csv")
   write.csv(pa,fpath)
   
   return(peakAnno)
 }
 
-generate_pca_plots<-function(dds,sampleinfo,exclusionlist){
+generate_pca_plots<-function(dds,sampleinfo,exclusionlist,contrast_id){
+  # default for nsub is 1000, if there are less than 1000 rows this will error
+  if (nrow(dds) < 1000){
+    rld <- vst(dds,nsub=nrow(dds))
+  } else{
+    rld <- vst(dds)
+  }
+  
   # analysis of variance
-  rld <- vst(dds)
   assayrld = as.data.frame(assay(rld))
   assayrld$row_variance = rowVars(as.matrix(assayrld))
   assayrld = arrange(assayrld,desc(row_variance))
@@ -214,9 +319,9 @@ generate_pca_plots<-function(dds,sampleinfo,exclusionlist){
   
   # create title
   if (length(exclusionlist)==0){
-    plottitle="All Samples Normalized"
+    plottitle=paste0("All Samples Normalized\n",contrast_id)
   } else {
-    plottitle="Selected Samples Normalized"
+    plottitle=paste0("Selected Samples Normalized\n",contrast_id)
   }
   #plot PCA
   pca=prcomp(t(assayrld),scale. = T)
@@ -231,6 +336,34 @@ generate_pca_plots<-function(dds,sampleinfo,exclusionlist){
     geom_text_repel(max.overlaps = 10,size=2)+
     theme_light()
   print(p)
+}
+
+generate_ecoli_plots<-function(contrast_id){
+  bam_subpath=gsub("peaks/0.05/contrasts","bam",car_subpath)
+  sample1=strsplit(contrast_id,"_vs_")[[1]][1]
+  sample2=strsplit(contrast_id,"_vs_")[[1]][2]
+  
+  ecoli_df=data.frame()
+  for (sampleid in subset(groups_df,group==sample1 | group==sample2)$sampleid){
+    stats=read.table(paste0(bam_subpath,sampleid,".",dedup_status,".bam.idxstats"))
+    stats=stats[,c("V1","V3")]
+    colnames(stats)=c("location","read_count")
+    stats$sampleid=sampleid
+    stats$groupid=groups_df[groups_df$sampleid==sampleid,]$group
+    
+    if(nrow(ecoli_df)==0){
+      ecoli_df=subset(stats,location=="NC_000913.3")
+    } else{
+      ecoli_df=rbind(subset(stats,location=="NC_000913.3"),
+                     ecoli_df)
+    }
+  }
+  
+  p=ggplot(data=ecoli_df,aes(x=sampleid,y=read_count,fill=groupid)) + 
+    geom_bar(stat="identity")
+  p_final=p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    ggtitle(paste0("Spike-in control values\n", contrast_id))
+  print(p_final)
 }
 
 main_prep_qc_core<-function(contrast_id,exclusionlist=""){
@@ -257,24 +390,31 @@ main_prep_qc_core<-function(contrast_id,exclusionlist=""){
   colnames(filtered)=shorten_sample_id(colnames(filtered))
   
   # generate RLE plot
-  generate_RLE_plot(condition1,condition2,rawcounts,"Fig. Before Normalization")
+  generate_RLE_plot(condition1,condition2,rawcounts,
+                    paste0("Fig. Before Normalization \n",contrast_id))
   
   # generate boxplots
-  generate_boxplots(sampleinfo,rawcounts)
+  generate_boxplots(sampleinfo,rawcounts,contrast_id)
   
   # run deseq
   dds=run_deseq_analysis(filtered,sampleinfo)
   
-  #save results as df
+  #save results as df, write out normalized results
   result_dds <- results(dds)
   results_df <- as.data.frame(result_dds)
+  fpath=paste0(output_car_dir,"DESEQ_norm_counts_",contrast_id,".csv")
+  write.csv(as.data.frame(assay(dds)),fpath)
   
   # annotate res
   peakAnno=peak_annotation(result_dds,contrast_id)
   
   # plot deseq2
-  generate_RLE_plot(condition1,condition2,counts(dds, normalize=TRUE),"Fig. DESEq2 Normalization")
-  generate_pca_plots(dds,sampleinfo,exclusionlist)
+  generate_RLE_plot(condition1,condition2,counts(dds, normalize=TRUE),
+                    paste0("Fig. DESEq2 Normalization\n",contrast_id))
+  generate_pca_plots(dds,sampleinfo,exclusionlist,contrast_id)
+  
+  # plot ecoli
+  generate_ecoli_plots(contrast_id)
   
   # run exclusions
   if (length(exclusionlist)!= 0){
@@ -283,7 +423,7 @@ main_prep_qc_core<-function(contrast_id,exclusionlist=""){
     
     # run analysis again
     dds=run_deseq_analysis(filtered,sampleinfo)
-    generate_pca_plots(dds,sampleinfo,exclusionlist)
+    generate_pca_plots(dds,sampleinfo,exclusionlist,contrast_id)
   }
   
   return(peakAnno)
@@ -293,7 +433,7 @@ main_prep_qc_core<-function(contrast_id,exclusionlist=""){
 # Create sig counts
 ############################################################
 # creates sig df for peaks / contrast
-create_sig_df<-function(contrast_id){
+create_sig_df<-function(contrast_id,norm_type_cutandrun){
   # set extension
   extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
   
@@ -301,6 +441,13 @@ create_sig_df<-function(contrast_id){
   fpath=paste0(car_subpath,contrast_id,extensions,
                "/",contrast_id,extensions,"_",method,"based_diffresults.txt")
   raw_df=read.csv(fpath,sep = "\t")
+  
+  # perform manual change of annotations due to viewing on tracks
+  ## only for project CS029758 with sample 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb
+  if (cs_id=="CS029758" && contrast_id=="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"){
+    raw_df = fix_annotations_main(raw_df)
+  }
+  
   fpath=paste0(output_car_dir,"DESEQ2_res_",contrast_id,".csv")
   write.csv(raw_df,fpath)
   
@@ -308,6 +455,7 @@ create_sig_df<-function(contrast_id){
   raw_df$flag_padj <- ifelse(raw_df$padj <=padj_cutoff,"Y", "N") # pval
   raw_df$flag_log2fc <- ifelse(abs(raw_df$log2FoldChange) >=log2fc_cutoff_car,"Y", "N") #log2fc
   raw_df$flag_anno <- ifelse(is.na(raw_df$SYMBOL) | raw_df$shortAnno=="Downstream","N", "Y") #SYMBOL avail & not downstream
+  raw_df$flag_anno[raw_df$shortAnno=="Distal"]="N"
   raw_df$flag_padj_log2fc <- ifelse((raw_df$flag_padj == "Y") & (raw_df$flag_log2fc == "Y"),"Y", "N") #pval and log2fc
   raw_df$flag_padj_log2fc_anno <- ifelse((raw_df$flag_padj_log2fc == "Y") & (raw_df$flag_anno == "Y"),"Y", "N") #pval log2fc anno
   fpath=paste0(output_car_dir,"sig_tracking_",contrast_id,".csv")
@@ -330,6 +478,26 @@ create_sig_df<-function(contrast_id){
   } else{
     print(paste0("There are no significant peaks for contrast",contrast_id))
   }
+  return(filt_df)
+}
+
+# creates nonsig df for peaks / conrtrast
+create_nonsig_df<-function(contrast_id,norm_type_cutandrun){
+  # set extension
+  extensions=c(paste0("__",dedup_status,"__",norm_type_cutandrun,".bed"))
+
+  # read file
+  filt_df=read.csv(paste0(output_car_dir,"sig_tracking_",contrast_id,".csv"))
+  
+  #add metadata
+  filt_df$sample=contrast_id
+  filt_df$dedup=strsplit(extensions,"__")[[1]][2]
+  filt_df$type=strsplit(strsplit(extensions,"__")[[1]][3],"[.]")[[1]][2]
+  filt_df$type=filt_df$type %>% replace(is.na(.),"narrowPeak")
+  filt_df$method=method
+  filt_df$total=nrow(filt_df)
+  filt_df$uniqueid=paste0(filt_df$sample,"_",filt_df$dedup,"_",filt_df$type)
+  
   return(filt_df)
 }
 
@@ -389,16 +557,20 @@ fillin_sig_gene_df<-function(df_in){
 ############################################################
 # Collapse counts
 ############################################################
-create_collapsed_df<-function(merged_sig_df){
+create_sig_collapsed_df<-function(merged_df){
   collapsed_df=data.frame()
   
-  # write out df
-  fpath=paste0(output_car_dir,"merged_sig_",cs_id,".csv")
-  write.csv(merged_sig_df,fpath)
+  merged_file_out=paste0(output_car_dir,"merged_sig_",cs_id,".csv")
+  collapsed_file_out="collapsed_df.csv"
+  
+  # write out merged file df
+  out_df=merged_df[,c("sample","shortAnno","dedup",
+                         "type","method","total","uniqueid")]
+  write.csv(out_df,merged_file_out)
   
   # for each sample collapse annotation and sort by fold change
-  for (sampleid in unique(merged_sig_df$sample)){
-    sub_df=subset(merged_sig_df,sample==sampleid)
+  for (sampleid in unique(merged_df$sample)){
+    sub_df=subset(merged_df,sample==sampleid)
     
     # collapse to get shortAnno counts
     tmp_collapsed=sub_df %>% dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid)
@@ -429,7 +601,42 @@ create_collapsed_df<-function(merged_sig_df){
   }
   
   # write out df
-  fpath=paste0(output_car_dir,"collapsed_df.csv")
+  fpath=paste0(output_car_dir,collapsed_file_out)
+  write.csv(collapsed_df,fpath)
+  
+  return(collapsed_df) 
+}
+
+create_nonsig_collapsed_df<-function(merged_df){
+  collapsed_df=data.frame()
+  
+  merged_file_out=paste0(output_car_dir,"merged_nonsig_",cs_id,".csv")
+  collapsed_file_out="collapsed_df_nonsig.csv"
+  
+  # write out merged file df
+  out_df=merged_df[,c("sample","shortAnno","dedup",
+                         "type","method","total","uniqueid")]
+  write.csv(out_df,merged_file_out)
+  
+  # for each sample collapse annotation and sort by fold change
+  for (sampleid in unique(merged_df$sample)){
+    sub_df=subset(merged_df,sample==sampleid&shortAnno != "Downstream")
+    
+    # update totals without downstream
+    sub_df$total=nrow(sub_df)
+    
+    # collapse to get shortAnno counts
+    tmp_collapsed=sub_df %>% dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid)
+    
+    #calculate percentages
+    tmp_collapsed$perc=round((tmp_collapsed$n/tmp_collapsed$total)*100,2)
+    
+    #merge dfs
+    collapsed_df=rbind(collapsed_df,tmp_collapsed)
+  }
+  
+  # write out df
+  fpath=paste0(output_car_dir,collapsed_file_out)
   write.csv(collapsed_df,fpath)
   
   return(collapsed_df) 
@@ -484,6 +691,9 @@ generate_volcano_plots<-function(data_type,contrast_id,gene_list_in="OFF"){
     # read in res from DEG merge
     fpath=paste0(output_car_dir,"DESeq2_res_",contrast_id,".csv")
     results_df=read.csv(fpath,sep=",")
+    
+    # convert downstream to distal
+    results_df$shortAnno=gsub("Downstream", "Distal", results_df$shortAnno)
   } else{
     # rna db
     fpath=paste0(output_rna_dir,"DESeq2_",contrast_id,"_DEG_allgenes_res1.txt")
@@ -494,17 +704,19 @@ generate_volcano_plots<-function(data_type,contrast_id,gene_list_in="OFF"){
   # calc log10
   results_df$log_pval=-log10(results_df$pvalue)
   
-  # add colors and annotate
-  colors=brewer.pal(7,"Set1")
-  shapes=c(3,15,19)
-  
+  # add colors and shapes
+  #http://sape.inf.usi.ch/quick-reference/ggplot2/colour
+  #https://www.datanovia.com/en/blog/ggplot-point-shapes-best-tips/
+  colors=c("grey70","red","blue")
+  shapes=c(20,2,3)
+
   #apply color based on list
   if (gene_list_in=="OFF"){
     gene_list_name="allgenes"    
     anno_types=levels(as.factor(results_df$shortAnno))
     
     # set all vals to NS and grey
-    keyvals=rep("grey",times=nrow(results_df))
+    keyvals=rep(colors[1],times=nrow(results_df))
     names(keyvals)=rep("NS",times=length(keyvals))
     
     for ( i in seq(1,length(anno_types))) {
@@ -535,6 +747,7 @@ generate_volcano_plots<-function(data_type,contrast_id,gene_list_in="OFF"){
                         legendLabSize = 10,legendPosition = 'right')
     print(p)
     
+    
     # rename df for write out
     sub_df=results_df
     
@@ -544,89 +757,74 @@ generate_volcano_plots<-function(data_type,contrast_id,gene_list_in="OFF"){
     results_df=subset(results_df,log_pval!="Inf")
     
     # apply gene list types
-    results_df$gene_annotation="Other genes"
-    results_df$gene_annotation[results_df$SYMBOL %in% gene_list]=gene_list_name
+    results_df$gene_annotation="Other Genes"
+    for (gid in gene_list_name){
+      gene_list=subset(gene_df,Set==gid)$Human
+      results_df$gene_annotation[results_df$SYMBOL %in% gene_list]=gid
+    }
     anno_types=levels(as.factor(results_df$gene_annotation))
     
-    # set colors to "Other"
-    keyvals=rep("grey",times=nrow(results_df))
-    names(keyvals)=rep("Other genes",times=length(keyvals))
-    keyvals.shape=rep(3,times=nrow(results_df))
-    names(keyvals.shape)=rep("Other genes",times=length(keyvals.shape))
-    
-    #sort the df
-    results_df=results_df[order(results_df$gene_annotation,decreasing=TRUE),]
-    
-    # add color
-    for ( i in seq(1,length(anno_types))) {
-      if (anno_types[i]=="Other genes"){
+    # create color/shape determination
+    results_df$factor="Other Genes"
+    for ( i in seq(1,length(anno_types))){
+      if (anno_types[i]=="Other Genes"){
         next
-      } else{
-        keyvals[ abs(results_df$log2FoldChange) >= log2fc_cutoff_car & 
-                   results_df$padj < padj_cutoff & 
-                   results_df$gene_annotation == anno_types[i]] = colors[i]
-        names(keyvals)[keyvals == colors[i]] <- anno_types[i]
+      } else{results_df$factor[abs(results_df$log2FoldChange) >= log2fc_cutoff_car & 
+                        results_df$padj < padj_cutoff & 
+                        results_df$gene_annotation == anno_types[i]] <- paste0(anno_types[i]," Genes")
       }
     }
     
-    # add shapes
-    for ( i in seq(1,length(anno_types))) {
-      keyvals.shape[ abs(results_df$log2FoldChange) >= log2fc_cutoff_car & 
-                       results_df$padj < padj_cutoff & 
-                       results_df$gene_annotation == anno_types[i]] = shapes[i]
-      names(keyvals.shape)[keyvals.shape == shapes[i]] <- anno_types[i]
-    }
+    #Set all distal to Other Genes
+    results_df$factor[results_df$shortAnno=="Distal"]="Other Genes"
     
-    # colors are significance, shape is the gene list designation
-    p = EnhancedVolcano(results_df,
-                        lab = results_df$SYMBOL,
-                        x = 'log2FoldChange',
-                        y = 'padj',
-                        ylab = bquote(~-Log[10] ~ FDR),
-                        pCutoff = padj_cutoff,
-                        FCcutoff = log2fc_cutoff_car,
-                        labSize = 4,
-                        cutoffLineType = 'twodash',
-                        cutoffLineWidth = 0.8,
-                        shapeCustom = keyvals.shape,
-                        title = paste0(contrast_id,"\n"),
-                        subtitle = "",
-                        subtitleLabSize = 1,
-                        captionLabSize = 10,
-                        #colCustom = keyvals,
-                        colAlpha = 1,
-                        legendLabels = c("NS", expression(Log[2] ~ FC), "FDR", expression(FDR ~ and ~ log[2] ~ FC)),
-                        legendLabSize = 10,legendPosition = 'right')
-    print(p)
+    # sort df
+    results_df=results_df[order(results_df$gene_annotation,decreasing=TRUE),]
+
+    # create plot
+    p=ggplot(data=results_df, 
+             aes(x=log2FoldChange, y=-log10(padj), col=factor, shape = factor)) + 
+      geom_point(size = 3.5, stroke=1.5, alpha = 0.4) + 
+      scale_color_manual("",
+                         values=colors[1:length(unique(results_df$factor))],
+                         breaks=c(unique(results_df$factor))) +
+      scale_shape_manual("",
+                         values=shapes[1:length(unique(results_df$factor))],
+                         breaks=c(unique(results_df$factor))) +
+      geom_vline(xintercept=c(-0.6, 0.6), col="black",linetype="dotted") +
+      geom_hline(yintercept=-log10(0.05), col="black",linetype="dotted") +
+      ggtitle(contrast_id) + 
+      scale_x_continuous(limits=c(-3,3)) +
+      scale_y_continuous(limits=c(0,80)) +
+      xlab(bquote(Log[2]~fold~change))+
+      ylab(bquote(-Log[10]~italic(padj)))
     
-    # color is the gene list designation
-    p = EnhancedVolcano(results_df,
-                        lab = results_df$SYMBOL,
-                        x = 'log2FoldChange',
-                        y = 'padj',
-                        ylab = bquote(~-Log[10] ~ FDR),
-                        pCutoff = padj_cutoff,
-                        FCcutoff = log2fc_cutoff_car,
-                        labSize = 3,
-                        cutoffLineType = 'twodash',
-                        cutoffLineWidth = 0.8,
-                        title = paste0(contrast_id,"\n"),
-                        subtitle = "",
-                        subtitleLabSize = 1,
-                        captionLabSize = 10,
-                        colCustom = keyvals,
-                        colAlpha = 1,
-                        legendLabels = c("NS", expression(Log[2] ~ FC), "FDR", expression(FDR ~ and ~ log[2] ~ FC)),
-                        legendLabSize = 10,legendPosition = 'right')
-    print(p)
+    p_final=p+theme(panel.grid.major = element_blank(), 
+                    panel.grid.minor = element_blank(),
+                    panel.background = element_blank(),
+                    legend.text=element_text(size=22),
+                    axis.text = element_text(size=22, color="black"),
+                    axis.title = element_text(size=22), 
+                    axis.line = element_line(color = "black", linewidth=1),
+                    legend.key=element_rect(fill="white"))
+    print(p_final)
+    
+    # save plot
+    fpath=paste0(img_dir,"volcano_",contrast_id,".pdf")
+    ggsave(fpath,p_final, width=3, height=3, units="in", scale=3)
+    
+    # add col for significance
+    results_df$significance="Y"
+    results_df$significance[results_df$factor=="Other Genes"]="N"
     
     # subset df for write
     if (data_type=="CAR"){
-      sub_df=subset(results_df,gene_annotation!="Other genes")[c("peakID","log2FoldChange",
+      sub_df=subset(results_df,gene_annotation!="Other Genes")[c("peakID","log2FoldChange",
                                                                  "padj","SYMBOL","shortAnno",
-                                                                 "gene_annotation")]
+                                                                 "gene_annotation","significance")]
+
     } else{
-      sub_df=subset(results_df,gene_annotation!="Other genes")[c("log2FoldChange",
+      sub_df=subset(results_df,gene_annotation!="Other Genes")[c("log2FoldChange",
                                                                  "padj","SYMBOL","gene_annotation")]
     }
   }
@@ -634,9 +832,159 @@ generate_volcano_plots<-function(data_type,contrast_id,gene_list_in="OFF"){
   # save DT
   sub_df$log2FoldChange=signif(sub_df$log2FoldChange,3)
   sub_df$padj=signif(sub_df$padj,3)
-  fpath=paste0(output_dir,"volcano_data_",contrast_id,"_",data_type,"_",gene_list_name,".csv")
+  merge_names=paste(gene_list_name,collapse = "_")
+  fpath=paste0(output_dir,"volcano_data_",contrast_id,"_",data_type,"_",merge_names,".csv")
   print(fpath)
   write.csv(sub_df,fpath,row.names = FALSE)
+  
+}
+
+generate_volcano_plots_rna<-function(contrast_id,gene_list_in="OFF"){
+  # rna db
+  fpath=paste0(output_rna_dir,"DESeq2_",contrast_id,"_DEG_allgenes_res1.txt")
+  rna_df=read.csv(fpath,sep="\t")
+  results_df=separate(rna_df,"X",c("ENSEMBL","SYMBOL"),sep="[|]")
+  
+  # calc log10
+  results_df$log_pval=-log10(results_df$pvalue)
+  
+  # add colors and shapes
+  #http://sape.inf.usi.ch/quick-reference/ggplot2/colour
+  #https://www.datanovia.com/en/blog/ggplot-point-shapes-best-tips/
+  colors=c("grey70","red","blue")
+  shapes=c(20,2,3)
+  
+  # filter NA's,inf
+  results_df=results_df[complete.cases(results_df$log_pval),]
+  results_df=subset(results_df,log_pval!="Inf")
+    
+  # apply gene list types
+  results_df$gene_annotation="Other Genes"
+  for (gid in gene_list_name){
+    gene_list=subset(gene_df,Set==gid)$Human
+    results_df$gene_annotation[results_df$SYMBOL %in% gene_list]=gid
+  }
+  anno_types=levels(as.factor(results_df$gene_annotation))
+    
+  # create color/shape determination
+  results_df$factor="Other Genes"
+  for ( i in seq(1,length(anno_types))){
+    if (anno_types[i]=="Other Genes"){
+      next
+    } else{results_df$factor[abs(results_df$log2FoldChange) >= log2fc_cutoff & 
+                                results_df$padj < padj_cutoff & 
+                                results_df$gene_annotation == anno_types[i]] <- paste0(anno_types[i]," Genes")
+    }
+  }
+  
+  # sort df
+  results_df=results_df[order(results_df$gene_annotation,decreasing=TRUE),]
+    
+  # create plot
+  p=ggplot(data=results_df, 
+            aes(x=log2FoldChange, y=-log10(padj), col=factor, shape = factor)) + 
+    geom_point(size = 3.5, stroke=1.5, alpha = 0.4) + 
+    scale_color_manual("",
+                       values=colors[1:length(unique(results_df$factor))],
+                       breaks=c(unique(results_df$factor))) +
+    scale_shape_manual("",
+                       values=shapes[1:length(unique(results_df$factor))],
+                       breaks=c(unique(results_df$factor))) +
+    geom_vline(xintercept=c(-0.6, 0.6), col="black",linetype="dotted") +
+    geom_hline(yintercept=-log10(0.05), col="black",linetype="dotted") +
+    ggtitle(contrast_id) + 
+    xlab(bquote(Log[2]~fold~change))+
+    ylab(bquote(-Log[10]~italic(padj)))
+    
+  p_final=p+theme(panel.grid.major = element_blank(), 
+                  panel.grid.minor = element_blank(),
+                  panel.background = element_blank(),
+                  legend.text=element_text(size=22),
+                  axis.text = element_text(size=22, color="black"),
+                  axis.title = element_text(size=22), 
+                  axis.line = element_line(color = "black", linewidth=1),
+                  legend.key=element_rect(fill="white"))
+  print(p_final)
+    
+  # save plot
+  fpath=paste0(img_dir,"volcano_",contrast_id,".pdf")
+  ggsave(fpath,p_final, width=3, height=3, units="in", scale=3)
+  
+  # add col for significance
+  results_df$significance="Y"
+  results_df$significance[results_df$factor=="Other Genes"]="N"
+    
+  # subset df for write
+  sub_df=subset(results_df,gene_annotation!="Other Genes")[c("log2FoldChange",
+                                                                 "padj","SYMBOL","gene_annotation")]
+  
+  # save DT
+  sub_df$log2FoldChange=signif(sub_df$log2FoldChange,3)
+  sub_df$padj=signif(sub_df$padj,3)
+  merge_names=paste(gene_list_name,collapse = "_")
+  fpath=paste0(output_dir,"volcano_data_",contrast_id,"_",merge_names,".csv")
+  print(fpath)
+  write.csv(sub_df,fpath,row.names = FALSE)
+  
+}
+
+generate_volcano_old<-function(){
+  # enchanced
+  ###############
+  # set default colors, shape for "Other"
+  keyvals=rep("grey",times=nrow(results_df))
+  names(keyvals)=rep("Other_genes",times=length(keyvals))
+  keyvals.shape=rep(3,times=nrow(results_df))
+  names(keyvals.shape)=rep("Other_genes",times=length(keyvals.shape))
+  
+  #sort the df
+  results_df=results_df[order(results_df$gene_annotation,decreasing=TRUE),]
+  
+  # add color
+  for ( i in seq(1,length(anno_types))) {
+    if (anno_types[i]=="Other_genes"){
+      next
+    } else{
+      keyvals[ abs(results_df$log2FoldChange) >= log2fc_cutoff_car & 
+                 results_df$padj < padj_cutoff & 
+                 results_df$gene_annotation == anno_types[i]] = colors[i]
+      names(keyvals)[keyvals == colors[i]] <- anno_types[i]
+    }
+  }
+  
+  # add shapes
+  for ( i in seq(1,length(anno_types))) {
+    if (anno_types[i]=="Other_genes"){
+      next
+    } else{
+      keyvals.shape[ abs(results_df$log2FoldChange) >= log2fc_cutoff_car & 
+                       results_df$padj < padj_cutoff & 
+                       results_df$gene_annotation == anno_types[i]] = shapes[i]
+      names(keyvals.shape)[keyvals.shape == shapes[i]] <- anno_types[i]
+    }
+  }
+  
+  # colors are significance, shape is the gene list designation
+  p = EnhancedVolcano(results_df,
+                      lab = results_df$SYMBOL,
+                      x = 'log2FoldChange',
+                      y = 'padj',
+                      ylab = bquote(~-Log[10] ~ FDR),
+                      pCutoff = padj_cutoff,
+                      FCcutoff = log2fc_cutoff_car,
+                      labSize = 4,
+                      cutoffLineType = 'twodash',
+                      cutoffLineWidth = 0.8,
+                      shapeCustom = keyvals.shape,
+                      title = paste0(contrast_id,"\n"),
+                      subtitle = "",
+                      subtitleLabSize = 1,
+                      captionLabSize = 10,
+                      colCustom = keyvals,
+                      colAlpha = 1,
+                      legendLabels = c("NS", expression(Log[2] ~ FC), "FDR", expression(FDR ~ and ~ log[2] ~ FC)),
+                      legendLabSize = 10,legendPosition = 'right')
+  print(p)
   
   # set labels
   log_pval=-log10(results_df$pvalue)
@@ -665,12 +1013,11 @@ generate_volcano_plots<-function(data_type,contrast_id,gene_list_in="OFF"){
   return(p)
 }
 
-generate_volcano_plots_rnaseq<-function(cntrl_in,treat_in,type_in){
+generate_volcano_plotly_rnaseq<-function(cntrl_in,treat_in,type_in){
   # read in res from DEG merge
   contras=c(treat_in,cntrl_in)
   fpath=paste0(output_rna_dir,"DESeq2_",contras[1],"-", contras[2],"_DEG_allgenes_res1.txt")
   res1=read.csv(fpath,sep="\t")
-  
   
   # Volcano Plots
   if (type_in=="pvalue"){
@@ -722,7 +1069,109 @@ plot_pies_collapsed<-function(sub_in,df_in,y_in,percent_in,plot_in,title_in){
   return(p_out)
 }
 
+single_sample_picharts<-function(contrast_id,peak_type,neg_control){
+  #set conditions
+  condition1=strsplit(contrast_id,"_vs_")[[1]][1]
+  condition2=strsplit(contrast_id,"_vs_")[[1]][2]
+  plot_id=c("1.)","2.)")
+  counter=1
+  
+  for (condition_id in c(condition1,condition2)){
+    #read results
+    file_path=paste0(bed_subpath,condition_id,"_1_vs_",neg_control,".",dedup_status,".",peak_type,"_peaks.bed")
+    bed_df=read.csv(file_path,sep="\t",header=FALSE)
+    colnames(bed_df)=c("chrom","start","end")
+    
+    # make GRANGES obj
+    peaks <- GenomicRanges::makeGRangesFromDataFrame(bed_df)
+    
+    if (genome=="mm10"){
+      txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
+      anno_db<-"org.Mm.eg.db"
+    } else if (genome=="hg19"){
+      txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+      anno_db<-"org.Hs.eg.db"
+    } else if (genome=="hg38"){
+      txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+      anno_db<-"org.Hs.eg.db"
+    }
+    
+    #annotate
+    options(ChIPseeker.downstreamDistance = 0)
+    peakAnno <- ChIPseeker::annotatePeak(peaks,
+                                         tssRegion = c(-2000,200),
+                                         TxDb = txdb,
+                                         level = "gene",
+                                         overlap = "all",
+                                         annoDb = anno_db,
+                                         genomicAnnotationPriority = c("Promoter", 
+                                                                       "5UTR", "3UTR", "Exon",
+                                                                       "Intron","Intergenic"))
+    pa <- as.data.frame(peakAnno)
+    pa$shortAnno=stringr::word(pa$annotation,1)
+    pa$shortAnno[pa$shortAnno=="5'"]="5'UTR"
+    pa$shortAnno[pa$shortAnno=="3'"]="3'UTR"
+    pa$peakID = paste0(pa$seqnames,":",pa$start,"-",pa$end)
+    
+    # write out
+    file_path=paste0(output_dir,condition_id,"_single_sample_peaks.txt")
+    write.table(pa,file=file_path,quote=FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
+    
+    # save total
+    pa$total=nrow(pa)
+    
+    # collapse to get shortAnno counts
+    tmp_collapsed=pa %>% dplyr::count(shortAnno,total)
+    
+    #calculate percentages
+    tmp_collapsed$perc=round((tmp_collapsed$n/tmp_collapsed$total)*100,2)
+    
+    tmp_df <- tmp_collapsed %>% 
+      mutate(csum = rev(cumsum(rev(n))), 
+             pos = n/2 + lead(csum, 1),
+             pos = if_else(is.na(pos), n/2, pos))
+    
+    # plot
+    plot_title=paste0("Annotation of peaks for condition: ",condition_id,
+                      " (N=",unique(tmp_df$total),")")
+    p1=plot_pies_collapsed(tmp_collapsed,tmp_df,"n","perc",plot_id[counter],plot_title)
+    print(p1)
+    
+    print(DT::datatable(tmp_df))
+    counter=counter+1
+    
+    fpath=paste0(img_dir,"piechart_sample_peaks_",condition_id,".pdf")
+    ggsave(fpath,p1)
+  }
+}
+
 # main function
+main_piecharts_from_collapsed_nonsig<-function(sample_id){
+  
+  # bring in df
+  fpath=paste0(output_car_dir,"collapsed_df_nonsig.csv")
+  collapsed_df=read.csv(fpath,sep=",")
+  
+  # subset for sample, downstream
+  sub_df=subset(collapsed_df,sample==sample_id)
+  
+  # get positions, plot
+  ## all totals
+  tmp_df <- sub_df %>% 
+    mutate(csum = rev(cumsum(rev(n))), 
+           pos = n/2 + lead(csum, 1),
+           pos = if_else(is.na(pos), n/2, pos))
+  plot_title=paste0("All Peaks by Annotation:\n",
+                    unique(sub_df$sample)," (N=",sum(sub_df$n),")")
+  p1 = plot_pies_collapsed(sub_df,tmp_df,"n","perc","A",plot_title)
+  
+  print(p1)
+  print(DT::datatable(tmp_df))
+  
+  fpath=paste0(img_dir,"piechart_all_peaks_",sample_id,".pdf")
+  ggsave(fpath,p1)
+}
+
 main_piecharts_from_collapsed_secondary<-function(sample_id){
   
   # bring in df
@@ -738,9 +1187,10 @@ main_piecharts_from_collapsed_secondary<-function(sample_id){
     mutate(csum = rev(cumsum(rev(n))), 
            pos = n/2 + lead(csum, 1),
            pos = if_else(is.na(pos), n/2, pos))
-  plot_title=paste0("Significant Peaks by Annotation (ALL):\n",
+  plot_title=paste0("Significant Peaks by Annotation:\n",
                     unique(sub_df$sample)," (N=",sum(sub_df$n),")")
-  p1 = plot_pies_collapsed(sub_df,tmp_df,"n","perc","A",plot_title)
+  p1 = plot_pies_collapsed(sub_df,tmp_df,"n","perc","B",plot_title)
+  print(sub_df)
   
   ## up
   sampleL=strsplit(unique(sub_df$sample),"_vs_")[[1]][1]
@@ -751,7 +1201,7 @@ main_piecharts_from_collapsed_secondary<-function(sample_id){
   plot_title=paste0(unique(sub_df$sample),"\n",
                     "Significant Peaks by Annotation (N=",sum(sub_df$up),")\n",
                     "Increased in ", sampleL)
-  p2 = plot_pies_collapsed(sub_df,tmp_df,"up","perc_up","B",plot_title)
+  p2 = plot_pies_collapsed(sub_df,tmp_df,"up","perc_up","C",plot_title)
   
   ##down
   tmp_df <- sub_df %>% 
@@ -761,11 +1211,19 @@ main_piecharts_from_collapsed_secondary<-function(sample_id){
   plot_title=paste0(unique(sub_df$sample),"\n",
                     "Significant Peaks by Annotation (N=",sum(sub_df$down),")\n",
                     "Decreased in ", sampleL)
-  p3 = plot_pies_collapsed(sub_df,tmp_df,"down","perc_down","C",plot_title)
+  p3 = plot_pies_collapsed(sub_df,tmp_df,"down","perc_down","D",plot_title)
   
   print(p1)
+  fpath=paste0(img_dir,"piechart_sig_peaks_all_",sample_id,".pdf")
+  ggsave(fpath,p1)
+  
   print(p2)
+  fpath=paste0(img_dir,"piechart_sig_peaks_up_",sample_id,".pdf")
+  ggsave(fpath,p2)
+  
   print(p3)
+  fpath=paste0(img_dir,"piechart_sig_peaks_down_",sample_id,".pdf")
+  ggsave(fpath,p3)
   
   #create formatted table
   out_df=sub_df[,c("sample","shortAnno","dedup","type","method","n","up","down","total")]
@@ -806,13 +1264,7 @@ main_piecharts_from_genelist<-function(contrast_id,gene_list,gene_list_name,proc
     genebodies_subset=length(unique(subset(genebodies_df,SYMBOL %in% gene_list & overlap_type=="overlap")$SYMBOL))
   }
   
-  
-  
   if (genebodies_subset>0){
-    # write out files
-    fpath=paste0(output_dir,gene_list_name,"_",contrast_id,".csv")
-    print(fpath)
-    write.csv(genebodies_subset,fpath)
     
     # plot all genes to those not included
     percent=round((genebodies_total-genebodies_subset)/genebodies_total*100,2)
@@ -825,6 +1277,7 @@ main_piecharts_from_genelist<-function(contrast_id,gene_list,gene_list_name,proc
     tmp_overlap$Counts=as.numeric(tmp_overlap$Counts)
     tmp_overlap$Percent=as.numeric(tmp_overlap$Percent)
     
+    # plot
     p=ggplot(tmp_overlap, aes(x=Type, y=Percent)) +
       geom_bar(stat="identity", fill="steelblue")+
       geom_text(aes(label=paste0(Counts," genes")), vjust=-1, color="black", size=3.5)+
@@ -832,6 +1285,9 @@ main_piecharts_from_genelist<-function(contrast_id,gene_list,gene_list_name,proc
       ylab("Percent of Genes included")+
       theme_minimal()
     print(p)
+    
+    fpath=paste0(img_dir,"barplot_all_",contrast_id,".pdf")
+    ggsave(fpath,p)
     
     # for genes included, what is their makeup
     genebodies_subset=subset(genebodies_df,SYMBOL %in% gene_list & overlap_type=="overlap")
@@ -853,6 +1309,11 @@ main_piecharts_from_genelist<-function(contrast_id,gene_list,gene_list_name,proc
     tmp_overlap$Annotation_Type=factor(tmp_overlap$Annotation_Type, 
                                        levels=c(tmp_overlap$Annotation_Type))
     
+    # write out files
+    fpath=paste0(output_dir,gene_list_name,"_",contrast_id,".csv")
+    print(fpath)
+    write.csv(genebodies_subset,fpath)
+    
     p=ggplot(tmp_overlap, aes(x=Annotation_Type, y=Percent)) +
       geom_bar(stat="identity", fill="steelblue")+
       geom_text(aes(label=paste0(Counts," genes")), vjust=-1, color="black", size=3.5)+
@@ -860,6 +1321,9 @@ main_piecharts_from_genelist<-function(contrast_id,gene_list,gene_list_name,proc
       ylab("Percent of Genes included")+
       theme_minimal()
     print(p)
+    
+    fpath=paste0(img_dir,"barplot_",gene_list_name,"_",contrast_id,".pdf")
+    ggsave(fpath,p)
   } else{
     print("There are no overlapping genes")
   }
@@ -877,7 +1341,7 @@ main_differential_genes<-function(contrast_id,contrast_list){
   
   # subset for gene_body_list
   car_df_sub=subset(car_df,shortAnno %in% contrast_list)
-  
+
   # print outputs
   print(paste0("The number of peaks annotated: ",nrow(car_df)))
   print(paste0("The number of genes annotated: ",length(unique(car_df$SYMBOL))))
@@ -889,6 +1353,11 @@ main_differential_genes<-function(contrast_id,contrast_list){
   fpath=paste0(output_dir,"diff_genes_",contrast_id,".csv")
   print(fpath)
   write.table(car_df_sub,fpath,sep=",",row.names=FALSE)
+  
+  fpath=paste0(output_dir,"deeptools_sig_",contrast_id,".csv")
+  print(fpath)
+  write.csv(unique(car_df_sub$SYMBOL),fpath,row.names=FALSE)
+  
 }
 
 deg_group_add<-function(cntrl_in,treat_in){
@@ -1084,73 +1553,6 @@ generate_intensity_maps<-function(contrast_list,fpath1,fpath2,status_flag="singl
   }
 }
 
-################################################################################
-# boxplots
-################################################################################
-genebodies_boxplots<-function(contrast_id,extensions,sig_flag="Off"){
-  fpath=paste0(car_subpath,contrast_id,extensions,
-               "/",contrast_id,extensions,"_",method,"based_diffresults.txt")
-  car_df_filt=read.csv(fpath,sep = "\t")
-  
-  # if sigflag on, subset for only sigs
-  if (sig_flag=="ON"){
-    car_df_filt=subset(car_df_filt,(padj<padj_cutoff) & (abs(log2FoldChange)>=log2fc_cutoff_car))
-  }
-  
-  car_df_tmp=subset(car_df_filt,shortAnno=="Promoter")
-  car_df_tmp$anno_type="Promoter"
-  car_df_select=car_df_tmp[,c("log2FoldChange","anno_type")]
-  
-  car_df_tmp=subset(car_df_filt,shortAnno=="Intron")
-  car_df_tmp$anno_type="Intron"
-  car_df_select=rbind(car_df_select,car_df_tmp[,c("log2FoldChange","anno_type")])
-  
-  car_df_tmp=subset(car_df_filt,shortAnno=="Exon")
-  car_df_tmp$anno_type="Exon"
-  car_df_select=rbind(car_df_select,car_df_tmp[,c("log2FoldChange","anno_type")])
-  
-  boxplot(log2FoldChange~anno_type,data=car_df_select, main=contrast_id,
-          xlab="Annotation Type", ylab="Log2FoldChange")
-}
-
-generate_intensity_boxplot<-function(contrast_id){
-  # read tab file
-  fpath=paste0(output_dir,contrast_id,"_scores_per_bin.tab")
-  tab_df=read.csv(fpath,sep="\t",header=TRUE)
-  
-  # pivot the table
-  tibb.long <- pivot_longer(tab_df, cols=4:9, names_to = "Replicate", values_to = "Value")
-  tibb.long$Replicate=gsub("[.]","",gsub("X.","",tibb.long$Replicate))
-  
-  # convert and change to numeric
-  df.long=as.data.frame(tibb.long)
-  df.long$Value=as.numeric(df.long$Value)
-
-  df.long$Value=log(df.long$Value,10)
-  
-  # plot boxplots
-  p = ggplot(df.long, aes(Replicate,Value)) +         # Boxplot in ggplot2
-    geom_boxplot() +  ylab("log10(Chip Seq Intensity)") + xlab("") + ggtitle (contrast_id)
-  print(p)
-  
-  # pivot the table
-  tibb.long <- pivot_longer(tab_df, cols=c(4,7), names_to = "Replicate", values_to = "Value")
-  tibb.long$Replicate=gsub("[.]","",gsub("X.","",tibb.long$Replicate))
-  
-  # convert and change to numeric
-  df.long=as.data.frame(tibb.long)
-  df.long$Value=as.numeric(df.long$Value)
-  
-  df.long$Value=log(df.long$Value,10)
-  
-  # plot boxplots
-  p = ggplot(df.long, aes(Replicate,Value)) +         # Boxplot in ggplot2
-    geom_boxplot() +  ylab("log10(Chip Seq Intensity)") + xlab("") + ggtitle (contrast_id)
-  print(p)
-}
-################################################################################
-# heatmaps for differential
-################################################################################
 # Overwrites the pheatmap defaults
 draw_colnames_45 <- function (coln, gaps, ...) {
   "Overwrites body of pheatmap:::draw_colnames, customizing it my liking"
@@ -1160,11 +1562,24 @@ draw_colnames_45 <- function (coln, gaps, ...) {
   return(res)
 }
 
+# save heatmap
+save_pheatmap_pdf <- function(x, filename, width=7, height=7) {
+  stopifnot(!missing(x))
+  stopifnot(!missing(filename))
+  pdf(filename, width=width, height=height)
+  grid::grid.newpage()
+  grid::grid.draw(x$gtable)
+  dev.off()
+}
+
 # creates heatmap
-generate_heat_map_differential<-function(contrast_id,n_up,n_down,fshort){
+generate_heat_map_differential<-function(contrast_id,n_up,n_down,fshort,gene_list_flag="OFF"){
   ####################
   # process df
   #####################
+  # cut id
+  cut_id=strsplit(contrast_id,"_vs_")[[1]][1]
+  
   # read in data
   fpath=paste0(output_dir,"diff_genes_",contrast_id,".csv")
   car_df=read.table(fpath,sep=",",header=TRUE)
@@ -1173,7 +1588,7 @@ generate_heat_map_differential<-function(contrast_id,n_up,n_down,fshort){
   rownames(car_df_filt)<-NULL
   
   #sort 
-  car_df_filt=car_df_filt[order(car_df_filt$log2FoldChange),]
+  car_df_filt=car_df_filt[order(car_df_filt$log2FoldChange,decreasing=TRUE),]
   ####################
   # formatting
   #####################
@@ -1202,11 +1617,14 @@ generate_heat_map_differential<-function(contrast_id,n_up,n_down,fshort){
   ####################
   # plot "all" heatmap
   #####################
-  pheatmap(car_df_filt[,c("log2FoldChange")], 
-           scale = "none", main=paste0("All Significantly differentiated Genes\n", contrast_id),
-           cellwidth = 30, fontsize = 12, fontsize_row = 6, fontsize_col = 8, color = rampcols,
-           breaks=rampbreaks,border_color = "NA",cluster_cols=F)
+  p1 = pheatmap(car_df_filt[,c("log2FoldChange")], cluster_cols=F, cluster_rows = F,
+                scale = "none", main=paste0("Significantly differentiated ",cut_id,
+                                            " peaks\nassociated with gene annotated intragenic regions"),
+                cellwidth = 30, fontsize = 12, fontsize_row = 4, fontsize_col = 8, color = rampcols,
+                breaks=rampbreaks,border_color = "NA")
   
+  fpath=paste0(img_dir,"heatmap_all_",cut_id,".pdf")
+  save_pheatmap_pdf(p1, fpath)
   ####################
   # prep "subset" df
   #####################
@@ -1254,14 +1672,186 @@ generate_heat_map_differential<-function(contrast_id,n_up,n_down,fshort){
   
   mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
   
+  p1=pheatmap(car_df_type[,"log2FoldChange"], cluster_rows=F,labels_row=car_df_type$newID,
+              scale = "none", main=paste0("Select ",length(unique(car_df_type$newID)),
+                                          " significantly differentiated ",cut_id,
+                                          " peaks\nassociated with gene annotated intragenic regions"),
+              cellwidth = 30, fontsize = 12, fontsize_row = 6, fontsize_col = 8, color = rampcols,
+              breaks=rampbreaks,border_color = "NA",cluster_cols=F)
+  
+  fpath=paste0(img_dir,"heatmap_select_",cut_id,".pdf")
+  save_pheatmap_pdf(p1, fpath)
+  
   ####################
-  # plot
+  # gene list 
   #####################
-  pheatmap(car_df_type[,"log2FoldChange"], cluster_rows=F,labels_row=car_df_type$newID,
-           scale = "none", main=paste0("Select ",length(unique(car_df_type$newID)),
-                                       " Significantly Differentiated Genes"),
-           cellwidth = 30, fontsize = 12, fontsize_row = 6, fontsize_col = 8, color = rampcols,
-           breaks=rampbreaks,border_color = "NA",cluster_cols=F)
+  # subset
+  if (gene_list_flag=="ON"){
+    # subset for only genes in list
+    car_df_sub=subset(car_df_filt,SYMBOL%in%gene_list)
+    
+    # create a newID
+    car_df_sub$newID=paste0(car_df_sub$SYMBOL," (",car_df_sub$shortAnno,")")
+    
+    ####################
+    # formatting
+    #####################
+    # Heatmap Color Gradients 
+    # split above and below threshold because otherwise it wont center on zero
+    paletteLength <- 1000
+    nHalf=nrow(car_df_sub)/2
+    Min = min(car_df_sub$log2FoldChange)
+    Max = max(car_df_sub$log2FoldChange)
+    Thresh = 0
+    
+    rc1 = colorRampPalette(colors = c("blue", "white"), space="Lab")(nHalf)   
+    rc2 = colorRampPalette(colors = c("white", "red"), space="Lab")(nHalf)
+    rampcols = c(rc1, rc2)
+    
+    rampcols[c(nHalf, nHalf+1)] = rgb(t(col2rgb("white")), maxColorValue=256) 
+    rb1 = seq(Min, Thresh, length.out=nHalf+1)
+    rb2 = seq(Thresh, Max, length.out=nHalf+1)[-1]
+    rampbreaks = c(rb1, rb2)
+    
+    mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
+    
+    ####################
+    # plot heatmap
+    #####################
+    p1 = pheatmap(car_df_sub[,c("log2FoldChange")], cluster_rows=F,cluster_cols=F, labels_row=car_df_sub$newID,
+                  scale = "none", main=paste0("Significantly differentiated ",cut_id,
+                                              " peaks\nassociated with immune gene annotated intragenic regions"),
+                  cellwidth = 30, fontsize = 12, fontsize_row = 6, fontsize_col = 8, color = rampcols,
+                  breaks=rampbreaks,border_color = "NA")
+    
+    fpath=paste0(img_dir,"heatmap_immune_",cut_id,".pdf")
+    save_pheatmap_pdf(p1, fpath)
+  }
+  
+}
+
+################################################################################
+# boxplots
+################################################################################
+genebodies_boxplots<-function(contrast_id,extensions,sig_flag="Off"){
+  fpath=paste0(car_subpath,contrast_id,extensions,
+               "/",contrast_id,extensions,"_",method,"based_diffresults.txt")
+  car_df_filt=read.csv(fpath,sep = "\t")
+  
+  # if sigflag on, subset for only sigs
+  if (sig_flag=="ON"){
+    car_df_filt=subset(car_df_filt,(padj<padj_cutoff) & (abs(log2FoldChange)>=log2fc_cutoff_car))
+  }
+  
+  car_df_tmp=subset(car_df_filt,shortAnno=="Promoter")
+  car_df_tmp$anno_type="Promoter"
+  car_df_select=car_df_tmp[,c("log2FoldChange","anno_type")]
+  
+  car_df_tmp=subset(car_df_filt,shortAnno=="Intron")
+  car_df_tmp$anno_type="Intron"
+  car_df_select=rbind(car_df_select,car_df_tmp[,c("log2FoldChange","anno_type")])
+  
+  car_df_tmp=subset(car_df_filt,shortAnno=="Exon")
+  car_df_tmp$anno_type="Exon"
+  car_df_select=rbind(car_df_select,car_df_tmp[,c("log2FoldChange","anno_type")])
+  
+  boxplot(log2FoldChange~anno_type,data=car_df_select, main=contrast_id,
+          xlab="Annotation Type", ylab="Log2FoldChange")
+}
+
+generate_intensity_boxplot<-function(contrast_id,sample_list,color_pal=""){
+  # read tab file
+  fpath=paste0(output_car_dir,"DESEQ_norm_counts_",contrast_id,".csv")
+  tab_df=read.csv(fpath,header=TRUE)
+  
+  # fix col names
+  colnames(tab_df)=gsub("X","",colnames(tab_df))
+
+  #define rownames
+  rownames(tab_df)=tab_df$peakID
+  
+  ## create long df for scaled or not
+  create_long_df<-function(scale_factor,df_in){
+    if (scale_factor=="Y"){
+      #scale values, not centered
+      df_in=as.data.frame(t(scale(t(df_in[,sample_list]),center=FALSE)))
+    } else{
+      df_num=as.data.frame(sapply(df_in[2:ncol(df_in)], as.numeric))
+      rownames(df_num)=df_in$peakID
+      df_in=df_num[,sample_list]
+    }
+    
+    # pivot the table
+    tibb.long <- pivot_longer(df_in, cols=1:ncol(df_in), 
+                              names_to = "Replicate", values_to = "Value")
+    tibb.long$Replicate=gsub("[.]","",gsub("X.","",tibb.long$Replicate))
+    
+    # convert and change to numeric
+    df.long=as.data.frame(tibb.long)
+    df.long$Value=as.numeric(df.long$Value)
+    
+    # remove NAs
+    df.long=df.long[complete.cases(df.long), ][,c("Replicate","Value")]
+    return(df.long)
+  }
+  
+  # create scaled and nonscaled df
+  scaled_df=create_long_df("Y",tab_df)
+  nonscaled_df=create_long_df("N",tab_df)
+  
+  # merge dfs
+  df.long=scaled_df
+  #df.long=nonscaled_df
+  df.long$nonValue=nonscaled_df$Value
+  head(df.long)
+  
+  # determine length of string
+  rep_name_len=length(strsplit(df.long$Replicate,"_")[[1]])
+  
+  # create replicate numbers
+  df.long$RepID=separate(df.long,
+           Replicate,as.character(c(1:rep_name_len)),sep="_")[rep_name_len]
+  colnames(df.long)=c("Replicate","Value","nonValue","RepID")
+  #colnames(df.long)=c("Replicate","Value","RepID")
+  head(df.long)
+  
+  # shorten names
+  df.long$Replicate=gsub("_no_IFNb","_noI",df.long$Replicate)
+  df.long$Replicate=gsub("_IFNb","",df.long$Replicate)
+  head(df.long)
+  
+  if (length(color_pal)==0){
+    color_pal=c("black","black","blue","blue")
+  }
+  
+  # plot boxplots
+  p <- ggboxplot(df.long, x = "Replicate", y = "Value",
+                 color = "Replicate", palette = color_pal,
+                 short.panel.labs = FALSE)
+  pf = p + stat_compare_means(label = "p.format",method = "wilcox.test") +  
+    ylab("Chip Seq Intensity") + xlab("") + ggtitle (contrast_id) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    theme(legend.position="none")
+  print(pf)
+  
+  # save plot
+  fpath=paste0(img_dir,"box_plot",contrast_id,".pdf")
+  ggsave(fpath,pf)
+  
+  # plot histograms
+  mu <- ddply(df.long[,c(1,2)], "Replicate", summarise, grp.mean=mean(Value))
+  p<-ggplot(df.long, aes(x=Value, color=Replicate)) +
+    geom_histogram(fill="white", position="dodge")+
+    geom_vline(data=mu, aes(xintercept=grp.mean, color=Replicate),
+               linetype="dashed")+
+    theme(legend.position="top")
+  print(p)
+  
+  # print stats
+  print(compare_means(nonValue ~ Replicate, data = df.long, 
+                      group.by = "RepID",method="wilcox.test"))
+  print(compare_means(Value ~ Replicate, data = df.long, 
+                      group.by = "RepID",method="wilcox.test"))
 }
 
 ############################################################
@@ -1287,10 +1877,9 @@ create_venn_diagrams<-function(subtitle,merged_df){
   pf = p + ggtitle(full_title)
   
   # save and print
-  fpath=paste0(output_car_dir,"venndiagram_",subtitle,"_genes.png")
-  ggsave(fpath,pf)
-  
   print(pf)
+  fpath=paste0(img_dir,"venndiagram_",subtitle,"_genes_",contrast_id_car,".pdf")
+  ggsave(fpath,pf)
 }
 
 create_overlap_chrommap<-function(merged_df,subset_type){
@@ -1480,6 +2069,136 @@ main_differential_overlap<-function(subset_list,rna_regulation,car_regulation){
   }
 }
 
+create_overlap_heatmap<-function(df_in,contrast_id){
+  ####################
+  # input
+  #####################
+  #sort 
+  car_df_filt=df_in[order(df_in$log2FC_car,decreasing=TRUE),]
+  
+  ####################
+  # formatting
+  #####################
+  # Overwrite pheatmaps default draw_colnames with new version
+  assignInNamespace(x="draw_colnames", value="draw_colnames_45",ns=asNamespace("pheatmap")) 
+  
+  # Heatmap Color Gradients 
+  # split above and below threshold because otherwise it wont center on zero
+  paletteLength <- 1000
+  nHalf=nrow(car_df_filt)/2
+  Min = min(car_df_filt$log2FC_car)
+  Max = max(car_df_filt$log2FC_car)
+  Thresh = 0
+  
+  rc1 = colorRampPalette(colors = c("blue", "white"), space="Lab")(nHalf)   
+  rc2 = colorRampPalette(colors = c("white", "red"), space="Lab")(nHalf)
+  rampcols = c(rc1, rc2)
+  
+  rampcols[c(nHalf, nHalf+1)] = rgb(t(col2rgb("white")), maxColorValue=256) 
+  rb1 = seq(Min, Thresh, length.out=nHalf+1)
+  rb2 = seq(Thresh, Max, length.out=nHalf+1)[-1]
+  rampbreaks = c(rb1, rb2)
+  
+  mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
+  
+  ####################
+  # plot "all" heatmap
+  #####################
+  p1 = pheatmap(car_df_filt[,c("log2FC_car")], ,cluster_cols=F, cluster_rows = F,
+           scale = "none", main=paste0("Significantly differentiated ",contrast_id,
+                                       " peaks \nwhich induce differential mRNA expression associated\nwith gene annotated intragenic regions"),
+           cellwidth = 30, fontsize = 12, fontsize_row = 6, fontsize_col = 8, color = rampcols,
+           breaks=rampbreaks,border_color = "NA")
+  
+  fpath=paste0(img_dir,"heatmap_mrna_overlap_all_",contrast_id,".pdf")
+  save_pheatmap_pdf(p1, fpath)
+  ####################
+  # prep "subset" df
+  #####################
+  # sort
+  car_df_sub=car_df_filt[order(car_df_filt$padj_car),]
+  
+  # take top/bottom N genes
+  car_df_type=data.frame()
+  n=50
+  while(nrow(car_df_type)!=50){
+    print(paste0("Attempting ",n))
+    top_df=car_df_sub[c(1:n),]
+  
+    # create a newID
+    top_df$newID=paste0(top_df$SYMBOL," (",top_df$shortAnno,")")
+    
+    #remove duplicated id's 
+    car_df_type=(top_df[!duplicated(top_df$newID),])[,c("newID","log2FC_car")]
+    n=n+1
+  }
+  
+  # print values to help with subsetting
+  print(paste0("There are up:",nrow(subset(car_df_type,log2FC_car>=0))))
+  print(paste0("There are down:",nrow(subset(car_df_type,log2FC_car<=0))))
+  
+  # add rownames, set na to 0
+  rownames(car_df_type)=car_df_type$newID
+  car_df_type[is.na(car_df_type)]=0
+  
+  # sort
+  car_df_type=car_df_type[order(car_df_type$log2FC_car,decreasing=TRUE),]
+  head(car_df_type)
+  
+  ####################
+  # plot
+  #####################
+  nHalf=nrow(car_df_type)/2
+  Min = min(car_df_type$log2FC_car)
+  Max = max(car_df_type$log2FC_car)
+  Thresh = 0
+  
+  rc1 = colorRampPalette(colors = c("blue", "white"), space="Lab")(nHalf)   
+  rc2 = colorRampPalette(colors = c("white", "red"), space="Lab")(nHalf)
+  rampcols = c(rc1, rc2)
+  
+  rampcols[c(nHalf, nHalf+1)] = rgb(t(col2rgb("white")), maxColorValue=256) 
+  rb1 = seq(Min, Thresh, length.out=nHalf+1)
+  rb2 = seq(Thresh, Max, length.out=nHalf+1)[-1]
+  rampbreaks = c(rb1, rb2)
+  
+  mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
+  
+  ####################
+  # plot
+  #####################
+  p1=pheatmap(car_df_type[,"log2FC_car"], cluster_rows=F,labels_row=car_df_type$newID,
+           scale = "none", main=paste0("Select ",length(unique(car_df_type$newID)),
+                                       " Significantly differentiated ",contrast_id,
+                                       " peaks \nwhich induce differential mRNA expression associated\nwith gene annotated intragenic regions"),
+           cellwidth = 30, fontsize = 12, fontsize_row = 6, fontsize_col = 8, color = rampcols,
+           breaks=rampbreaks,border_color = "NA",cluster_cols=F)
+  fpath=paste0(img_dir,"heatmap_mrna_overlap_subset_",contrast_id,".pdf")
+  save_pheatmap_pdf(p1, fpath)
+}
+
+main_differential_overlap_all<-function(contrast_id_car,contrast_id_rna){
+  # read genebodies df up and down, merge
+  fpath_down=paste0(output_dir,"filt_overlap_genebodies_down_",contrast_id_car,"_",contrast_id_rna,".csv")
+  fpath_up=paste0(output_dir,"filt_overlap_genebodies_up_",contrast_id_car,"_",contrast_id_rna,".csv")
+  merged_df=rbind(read.csv(fpath_down),read.csv(fpath_up))
+  
+  # cut id
+  cut_id=strsplit(contrast_id_car,"_vs_")[[1]][1]
+  
+  # subset for overlap
+  overlap_df=subset(merged_df,overlap_type=="overlap")
+  
+  fpath=paste0(output_dir,"filter_overlap_",contrast_id_car,".csv")
+  write.csv(overlap_df,fpath)
+  
+  fpath=paste0(output_dir,"deeptools_overlap_",contrast_id_car,".csv")
+  write.csv(unique(overlap_df$SYMBOL),fpath,row.names=FALSE)
+  
+  # create heatmap of df
+  create_overlap_heatmap(overlap_df,cut_id)
+  
+}
 ############################################################
 # find differential overlap between CAR and CAR
 ############################################################
@@ -1639,12 +2358,13 @@ deg2geneList<-function(deg,t2g){
 
 # set the annotation dbs
 db_lookup<-function(t2g){
+  print(t2g)
   # generate gene lists for C1
   # generate gene lists for C2 with subtypes biocarta, kegg, reactome, wiki
   # generate gene lists for C5 with subtypes MF, BP, CC
   # generate gene lists for Hallmark
   if (t2g=="C1"){
-    db_out=msigdbr(species = species, category = "C1") %>% 
+    db_out=msigdbr(species = species_in, category = "C1") %>% 
       dplyr::select(gs_name,ensembl_gene)
   } else if (t2g=="C2:BIOCARTA"){
     db_out=msigdbr(species = species, category = "C2", subcategory = "BIOCARTA") %>% 
@@ -2290,7 +3010,7 @@ create_output_df<-function(df_in,n_in,extra_filter=""){
 }
 
 # creates heatmap
-generate_heat_map<-function(df_in,show_names="ON"){
+generate_heat_map<-function(df_in,show_names="ON",title_in="",cluster_by_rows="ON",fpath=""){
   
   ####################
   # formatting
@@ -2317,23 +3037,242 @@ generate_heat_map<-function(df_in,show_names="ON"){
   anno_colors <- list(Groups = columnColors)
   
   # set title
-  title_in=paste0("Significant Genes (N=",nrow(df_in),")")
-  
+  if(title_in==""){
+    title_in=paste0("Significant Genes (N=",nrow(df_in),")")
+  }
   ####################
   # function
   ####################
-  if (show_names=="OFF"){
-    pheatmap(df_in, 
+  if (show_names=="OFF" && cluster_by_rows=="ON"){
+    p=pheatmap(df_in, 
              scale = "none", main=title_in,
              cellwidth = 30, fontsize = 12, fontsize_row = 7, fontsize_col = 8, color = mycolors, 
              border_color = "NA",cluster_cols=F,annotation_colors = anno_colors, show_rownames = FALSE)
-  } else{
-    pheatmap(df_in, 
+  } else if (show_names=="ON" && cluster_by_rows=="ON") {
+    p=pheatmap(df_in, 
              scale = "none", main=title_in,
-             cellwidth = 30, fontsize = 12, fontsize_row = 7, fontsize_col = 8, color = mycolors, 
+             cellwidth = 30, fontsize = 12, fontsize_row = 5, fontsize_col = 8, color = mycolors, 
              border_color = "NA",cluster_cols=F,annotation_colors = anno_colors, show_rownames = TRUE)
+  } else if (show_names=="OFF" && cluster_by_rows=="OFF") {
+    p=pheatmap(df_in, 
+               scale = "none", main=title_in,
+               cellwidth = 30, fontsize = 12, fontsize_row = 7, fontsize_col = 8, color = mycolors, 
+               border_color = "NA",cluster_cols=F,cluster_rows=F,annotation_colors = anno_colors, 
+               show_rownames = FALSE)
+  }
+  if (fpath==""){
+    fpath=paste0(img_dir,"heatmap_",contrast_id,".pdf")
+  }
+  save_pheatmap_pdf(p, fpath)
+}
+
+# creates heatmap for multiple replicates
+generate_replicate_heatmaps<-function(contrast_id,peak_type,scale,gene_list_subset="",sample_subset=""){
+  # split contrast
+  contrast_1=strsplit(contrast_id,"_vs_")[[1]][1]
+  contrast_2=strsplit(contrast_id,"_vs_")[[1]][2]
+  
+  # define extension
+  contrast_extension=paste0(contrast_id,"__",dedup_status,"__",peak_type,"_peaks.bed")
+  
+  # read in counts matrix
+  fpath=paste0(output_car_dir,"DESEQ_norm_counts_",contrast_id,".csv")
+  counts_matrix=read.csv(fpath)
+  head(counts_matrix)
+  colnames(counts_matrix)=c("peakID",colnames(counts_matrix)[2:ncol(counts_matrix)])
+  
+  # replace X at the beginning of cols
+  colnames(counts_matrix)=gsub("X","",colnames(counts_matrix))
+  head(counts_matrix)
+  
+  # subset for samples, if needed
+  if (length(sample_subset)>1){
+    sample_list=sample_subset
+    counts_matrix=counts_matrix[,c("peakID",sample_list)]
+  } else{
+    sample_list=subset(groups_df,group%in% c(contrast_1,contrast_2))$sampleid
   }
   
+  # add annotation information
+  fpath=paste0(output_car_dir,"peak_annotation_",contrast_id,".csv")
+  peak_df=read.csv(fpath)[,c("peakID","SYMBOL","shortAnno")]
+  head(peak_df)
+  counts_matrix_anno=merge(counts_matrix,peak_df,by="peakID")
+  head(counts_matrix_anno)
+  
+  # pull rowname
+  rownames(counts_matrix_anno)=counts_matrix_anno$peakID
+  counts_matrix=counts_matrix_anno[,2:ncol(counts_matrix_anno)]
+  head(counts_matrix_anno)
+  
+  # read in sig gene list
+  fpath=paste0(output_dir,"deeptools_sig_",contrast_id,".csv")
+  deeptools_gene_list=read.csv(fpath)$x
+  head(deeptools_gene_list)
+  
+  # subset for gene list
+  counts_matrix_subset=subset(counts_matrix_anno,SYMBOL %in% deeptools_gene_list)
+  
+  # subset for non-distal annotated peaks
+  counts_matrix_subset=subset(counts_matrix_subset,shortAnno!="Distal")
+  
+  # if needed, subset for immune gene list
+  if (length(gene_list_subset)>1){
+    print("Subsetting based on gene_list provided")
+    counts_matrix_subset=subset(counts_matrix_subset,SYMBOL %in% gene_list_subset)
+    
+    print(paste0("Total number of peaks: ", nrow(counts_matrix_subset)))
+    print(paste0("Total number unique genes: ", length(unique(counts_matrix_subset$SYMBOL))))
+    
+    # keep only one instance per symbol
+    counts_matrix_subset=counts_matrix_subset[!duplicated(counts_matrix_subset$SYMBOL), ]
+    print(paste0("Total number of peaks after subsetting only unique genes: ", nrow(counts_matrix_subset)))
+    
+    # rename rows for printing
+    rownames(counts_matrix_subset)=make.unique(paste0(counts_matrix_subset$SYMBOL," (",counts_matrix_subset$shortAnno,")"))
+  } else{
+    print(paste0("Total number of peaks: ", nrow(counts_matrix_subset)))
+    print(paste0("Total number unique genes: ", length(unique(counts_matrix_subset$SYMBOL))))
+  }
+  
+  # scale if necessary
+  if (scale=="ON"){
+    print("performing scaling")
+    # ztransform df
+    counts_matrix_complete=t(scale(t(counts_matrix_subset[,sample_list])))
+    (head(counts_matrix_complete))
+  } else{
+    print("no scaling will be performed")
+    (head(counts_matrix_subset[,sample_list]))
+    counts_matrix_complete=counts_matrix_subset[,sample_list]
+  }
+  
+  # define output name, run heatmap
+  if (scale=="ON"){
+    fpath=paste0(img_dir,"heatmap_withscale_")
+  } else{
+    fpath=paste0(img_dir,"heatmap_withoutscale_")
+  }
+  if (length(gene_list_subset)>1){
+    fpath=paste0(fpath,"subset_",gene_list_name,"_",contrast_id,".pdf")
+    print(fpath)
+    
+    # generate heatmap
+    generate_heat_map(counts_matrix_complete,
+                      show_names="ON",
+                      title_in="",
+                      cluster_by_rows="ON",
+                      fpath=fpath)
+  } else{
+    fpath=paste0(fpath,contrast_id,".pdf")
+    
+    # generate heatmap
+    generate_heat_map(counts_matrix_complete,
+                      show_names="OFF",
+                      title_in="",
+                      cluster_by_rows="ON",
+                      fpath=fpath)
+  }
+}
+
+# creates heatmap for multiple replicates in RNASeq data
+generate_replicate_heatmaps_rna<-function(contrast_id,scale_flag,gene_list_subset="",sample_subset=""){
+  # split contrast
+  contrast_1=strsplit(contrast_id,"_vs_")[[1]][1]
+  contrast_2=strsplit(contrast_id,"_vs_")[[1]][2]
+  
+  # read in counts matrix
+  counts_matrix=read.csv(paste0(input_dir,"DEG_ALL/RawCountFile_RSEM_genes_filtered.txt"),sep="\t")
+  head(counts_matrix)
+  
+  # split EID and SYMBOL
+  counts_matrix=separate(counts_matrix,col="symbol",into=c("EID","SYMBOL"),sep="[|]")
+  
+  # keep one gene
+  counts_matrix=counts_matrix %>% distinct(SYMBOL,.keep_all=TRUE)
+  head(counts_matrix)
+  
+  # subset for samples, if needed
+  if (length(sample_subset)>1){
+    sample_list=sample_subset
+    counts_matrix=counts_matrix[,c("SYMBOL",sample_list)]
+    print(head(counts_matrix))
+  } else{
+    sample_list=subset(groups_df,group%in% c(contrast_1,contrast_2))$sampleid
+  }
+  
+  # pull rowname
+  rownames(counts_matrix)=make.unique(counts_matrix$SYMBOL)
+  head(counts_matrix)
+  
+  # read in sig gene list
+  deeptools_gene_list=read.csv(car_deeptools)$x
+  head(deeptools_gene_list)
+  
+  # subset for gene list
+  counts_matrix_subset=subset(counts_matrix,SYMBOL %in% deeptools_gene_list)
+  
+  # if needed, subset for immune gene list
+  if (length(gene_list_subset)>1){
+    print("Subsetting based on gene_list provided")
+    counts_matrix_subset=subset(counts_matrix_subset,SYMBOL %in% gene_list_subset)
+    
+    # keep only one instance per symbol
+    #counts_matrix_subset=counts_matrix_subset[!duplicated(counts_matrix_subset$SYMBOL), ]
+    
+    # rename rows for printing
+    rownames(counts_matrix_subset)=make.unique(paste0(counts_matrix_subset$SYMBOL))
+  }
+  
+  # scale if necessary
+  if (scale_flag=="ON"){
+    print("performing scaling")
+    # ztransform df
+    x=t(counts_matrix_subset[,sample_list])
+    counts_matrix_complete=t(scale(x))
+    print(head(counts_matrix_complete))
+  } else{
+    print("no scaling will be performed")
+    (head(counts_matrix_subset[,sample_list]))
+    counts_matrix_complete=counts_matrix_subset[,sample_list]
+  }
+  
+  # remove na values
+  counts_matrix_complete=counts_matrix_complete[complete.cases(counts_matrix_complete), ]
+  
+  #output counts matrix
+  if (length(gene_list_subset)>1){
+    fpath=paste0(output_rna_dir,"heatmap_normcounts_",contrast_id,".txt")
+  } else{
+    fpath=paste0(output_rna_dir,"heatmap_normcounts_subset_",contrast_id,".txt")
+  }
+  write.csv(counts_matrix_complete,fpath)
+
+  # define output name, run heatmap
+  if (scale_flag=="ON"){
+    fpath=paste0(img_dir,"heatmap_withscale_")
+  } else{
+    fpath=paste0(img_dir,"heatmap_withoutscale_")
+  }
+  if (length(gene_list_subset)>1){
+    fpath=paste0(fpath,"subset_",gene_list_name,"_",contrast_id,".pdf")
+    
+    # generate heatmap
+    generate_heat_map(counts_matrix_complete,
+                      show_names="ON",
+                      title_in="",
+                      cluster_by_rows="ON",
+                      fpath=fpath)
+  } else{
+    fpath=paste0(fpath,contrast_id,".pdf")
+    
+    # generate heatmap
+    generate_heat_map(counts_matrix_complete,
+                      show_names="OFF",
+                      title_in="",
+                      cluster_by_rows="ON",
+                      fpath=fpath)
+  }
 }
 
 #create heatmap and DT

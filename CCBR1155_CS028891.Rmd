@@ -1,7 +1,7 @@
 ---
 title: "CCBR1155 CS028891 RNA Analysis"
 author: "Samantha Sevilla"
-date: '2022-08-23'
+date: "`r Sys.Date()`"
 output: html_document
 editor_options: 
   chunk_output_type: console
@@ -17,18 +17,23 @@ editor_options:
 
 ```{r setup, include=FALSE}
 #dirs
-parent_dir="~/../../../Volumes/ccbr1155/"
-input_dir = "~/../../../Volumes/ccbr1155/CS028891/pipeliner_220713/"
-output_rna_dir = "~/../../../Volumes/ccbr1155/CS028891/r_analysis_220822/"
+parent_dir="~/../../../Volumes/CUTRUN/"
+input_dir = "~/../../../Volumes/CUTRUN/analysis/CS028891/pipeliner_220713/"
+output_rna_dir = "~/../../../Volumes/CUTRUN/analysis/CS028891/r_analysis_221223/"
+output_dir=output_rna_dir
+
+img_dir=paste0(output_rna_dir,"img/")
 dir.create(file.path(output_rna_dir), showWarnings = FALSE)
+dir.create(file.path(img_dir), showWarnings = FALSE)
 ```
 
 ```{r thresholds}
 # group to ignore
-ignore_groups=c("CRISPR_52_with_IFNb","CRISPR_53_with_IFNb","parental_HN6_with_IFNb")
+#ignore_groups=c("CRISPR_52_with_IFNb","CRISPR_53_with_IFNb","parental_HN6_with_IFNb")
+ignore_groups=""
 
 #cntrl
-cntrl="parental_HN6_without_IFNb"
+cntrl="parental_HN6_with_IFNb"
 
 # Threshold values
 log2fc_cutoff=0.3785 #FC of 1.3
@@ -39,7 +44,7 @@ analysis_type = "DESeq2" #either limma or DESeq2
 #databases to include in analysis options include:
 #http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
 #"C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H"
-db_list=c("C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H")
+db_list=c("C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC")
 
 ```
 
@@ -63,7 +68,7 @@ new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"
 if(length(new.packages)) BiocManager::install(new.packages)
 
 # source functions
-source('CAR_core_functions.R')
+source(paste0(parent_dir,'github/CAR_core_functions.R'))
 
 # load packages
 invisible(lapply(list.of.packages, library, character.only = TRUE))
@@ -88,8 +93,8 @@ colnames(groups_df) = c("sampleid","group")
 rownames(groups_df)=groups_df$sampleid
 
 ## if there is a subset gene list, select files
-gene_file = paste0(parent_dir,"docs/merged_gene_list_v2.csv")
-pi_gene_df = read.csv(gene_file)
+gene_file = paste0(parent_dir,"docs/gene_list_master.csv")
+gene_df = read.csv(gene_file)
 
 # read in the contrast list
 contrast_df=read.csv(paste0(input_dir,"contrasts.tab"),header=FALSE,sep="\t")
@@ -166,7 +171,7 @@ dds <- DESeqDataSetFromMatrix(countData = counts(set),
 dds <- DESeq(dds)
 ```
 
-```{r echo=FALSE}
+```{r norm_plot, echo=FALSE}
 par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
 plotRLE(counts(dds, normalize=TRUE), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
 plotPCA(counts(dds,normalize=TRUE), col=colors[x], cex=.8)
@@ -176,55 +181,103 @@ mtext("Fig. DESEq2 Normalization", side=2, outer=TRUE, adj=0)
 The data used for downstream analysis was DESEQ2 normalized and comparisons were made between samples.
 
 ```{r deg_run, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
-treatment="CRISPR_52_without_IFNb"
+treatment="CRISPR_52_with_IFNb"
 deg_group_add(cntrl,treatment)
 
-treatment="CRISPR_53_without_IFNb"
+treatment="CRISPR_53_with_IFNb"
 deg_group_add(cntrl,treatment)
 ```
 
 ## **Heatmaps**
 
-```{r echo=FALSE,warning=FALSE, message=FALSE}
+```{r heatmap, echo=FALSE,warning=FALSE, message=FALSE}
 ####################
 # run heatmaps
 ###################
 # find significant genes
-treatment="CRISPR_52_without_IFNb"
+treatment="CRISPR_52_with_IFNb"
 merged_fc=create_sig_gene_df(cntrl,treatment,25)
 
-treatment="CRISPR_53_without_IFNb"
+treatment="CRISPR_53_with_IFNb"
 merged_fc=full_join(merged_fc,create_sig_gene_df(cntrl,treatment,25))
 
 # fill in NA's in gene list
 merged_fc=fillin_sig_gene_df(merged_fc)
 
 #subset for logfc only
-heatmap_df=create_heatmap_df(merged_fc,"_without_IFNb")
+heatmap_df=create_heatmap_df(merged_fc,"_with_IFNb")
 
 # create output df
-create_output_df(merged_fc,25,"_without_IFNb")
+create_output_df(merged_fc,25,"_with_IFNb")
+```
 
-# create heatmap
-generate_heat_map(heatmap_df)
+## *Sample heatmaps* 
+```{r}
+contrast_id="CRISPR_53_with_IFNb_vs_parental_HN6_with_IFNb"
+
+car_annotation=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230129/",
+                      "peak_annotation_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb.csv")
+car_deeptools=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230129/",
+                     "deeptools_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb.csv")
+
+sample_sub_list=c("CRISPR_53_with_IFNb_1","CRISPR_53_with_IFNb_2","CRISPR_53_with_IFNb_3",
+                  "parental_HN6_with_IFNb_1","parental_HN6_with_IFNb_2","parental_HN6_with_IFNb_3")
+
+sample_sub_list=c("parental_HN6_with_IFNb_2","parental_HN6_with_IFNb_3",
+                  "CRISPR_53_with_IFNb_1","CRISPR_53_with_IFNb_3")
+# ALL GENES
+generate_replicate_heatmaps_rna(contrast_id=contrast_id,
+                            scale_flag="ON",
+                            sample_subset=sample_sub_list)
+# Immune genes
+gene_list_name="APM_INFA"
+gene_list=subset(gene_df,Set %in%  c("APM","IFNalpha"))$Human
+generate_replicate_heatmaps_rna(contrast_id=contrast_id,
+                            scale_flag="ON",
+                            sample_subset=sample_sub_list,
+                            gene_list_subset=gene_list)
+
+gene_list_name="APM"
+gene_list=subset(gene_df,Set %in%  c("APM"))$Human
+generate_replicate_heatmaps_rna(contrast_id=contrast_id,
+                            scale_flag="ON",
+                            sample_subset=sample_sub_list,
+                            gene_list_subset=gene_list)
+
+gene_list_name="INFA"
+gene_list=subset(gene_df,Set %in%  c("IFNalpha"))$Human
+generate_replicate_heatmaps_rna(contrast_id=contrast_id,
+                            scale_flag="ON",
+                            sample_subset=sample_sub_list,
+                            gene_list_subset=gene_list)
 ```
 
 ## **Volcano Plots**
 
 Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
 
-### CRISPR_52_without_IFNb {.tabset}
+### CRISPR_52_with_IFNb {.tabset}
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-treatment="CRISPR_52_without_IFNb"
+treatment="CRISPR_52_with_IFNb"
 type_in="FDR"
 generate_volcano_plots_rnaseq(cntrl,treatment,type_in)
+
+contrast_id="CRISPR_52_with_IFNb-parental_HN6_with_IFNb"
+gene_list_name=c("APM","IFNalpha")
+generate_volcano_plots_rna(contrast_id,
+                       gene_list_in="ON")
 ```
 
-### CRISPR_53_without_IFNb {.tabset}
+### CRISPR_53_with_IFNb {.tabset}
 ```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-treatment="CRISPR_53_without_IFNb"
+treatment="CRISPR_53_with_IFNb"
 type_in="FDR"
 generate_volcano_plots_rnaseq(cntrl,treatment,type_in)
+
+contrast_id="CRISPR_53_with_IFNb-parental_HN6_with_IFNb"
+gene_list_name=c("APM","IFNalpha")
+generate_volcano_plots_rna(contrast_id,
+                       gene_list_in="ON")
 ```
 
 ## **Enriched Pathways** 
@@ -242,8 +295,8 @@ of core enriched genes.
 ######################################################################
 # run ORA/GSEA
 ######################################################################
-treatment="CRISPR_52_without_IFNb"
-main_gsea_ora_function(cntrl_in=cntrl,
+treatment="CRISPR_52_with_IFNb"
+main_gsea_ora_function_rna(cntrl_in=cntrl,
               treat_in=treatment,
               db_list,
               top_path_value=50,
@@ -253,27 +306,11 @@ main_gsea_ora_function(cntrl_in=cntrl,
 
 #### CRISPR_53
 ```{r oragsea_run2, echo=FALSE, message=FALSE, warning=FALSE}
-treatment="CRISPR_53_without_IFNb"
-main_gsea_ora_function(cntrl_in=cntrl,
+treatment="CRISPR_53_with_IFNb"
+main_gsea_ora_function_rna(cntrl_in=cntrl,
               treat_in=treatment,
               db_list,
               top_path_value=50,
               ORA_flag = "OFF",
               GSEA_flag = "ON")
-```
-
-## **Selected Pathways** 
-
-Pathways of interest can be reviewed per sample. For example, pathway "chr18q21" from database "C1" is reviewed below. All significant genes that were implicated in this pathway were plotted in a heatmap, as well as a in a GSEA plot. Finally, a data table of all genes are provided for review.
-
-```{r selectpath_run, echo=FALSE, message=FALSE, warning=FALSE, out.width="50%"}
-######################################################################
-# run specific pathway analysis
-######################################################################
-treatment="CRISPR_52_without_IFNb"
-main_selectpath_function(t2g="C1",
-                        type_in="GSEA",
-                        path_id="chr18q21",
-                       cntrl_in=cntrl,
-                       treat_in=treatment)
 ```
