@@ -1,0 +1,204 @@
+---
+title: "PaperCounts"
+author: "Samantha Sevilla"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# Process
+```{r}
+library("dplyr","tidyr")
+parent_dir="~/../../Volumes/CUTRUN/"
+input_dir = "~/../../Volumes/CUTRUN/analysis/CS029758/"
+output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230321_newannotations/"
+rna_dir="~/../../Volumes/CUTRUN/analysis/CS028891/r_analysis_230323_newannotation/"
+output_dir=output_car_dir
+
+`%ni%` <- Negate(`%in%`)
+```
+
+Pull Cut&Run Data
+```{r include=FALSE}
+input_peaks_df=read.csv(paste0(output_car_dir,
+                               "contrast_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53D.csv"))
+input_peaks_df=input_peaks_df[,colnames(input_peaks_df)[-1]]
+```
+
+HN6 only
+```{r include=FALSE}
+peaks_df=subset(input_peaks_df,sample_threshold_HN6_H4K20me3_IFNb=="Y")
+print(paste0("N peaks in HN6: ",nrow(peaks_df)))
+```
+
+HN6 only > Remove downstream
+```{r include=FALSE}
+nodownstream_df=subset(peaks_df,shortAnno != "Downstream")
+total_raw_peaks=nrow(nodownstream_df)
+print(paste0("N without downstream: ",total_raw_peaks))
+```
+
+HN6 only > Remove downstream > Sig only
+```{r include=FALSE}
+# subset for sig
+sig_df=subset(nodownstream_df,flag_padj_log2fc=="Y")
+print(paste0("N significant: ",nrow(sig_df)))
+```
+
+HN6 only > Remove downstream > Sig only > Decreased
+```{r include=FALSE}
+decreased_df=subset(sig_df,log2FoldChange <=0)
+down_peaks=nrow(decreased_df)
+down_peaks_perc=round((down_peaks/total_raw_peaks)*100,2)
+print(paste0("N decreased: ",down_peaks," ", down_peaks_perc))
+
+```
+
+HN6 only > Remove downstream > Sig only > Decreased > By annotation
+```{r include=FALSE}
+intergenic_df=subset(decreased_df,shortAnno=="Distal")
+intergenic_peaks=nrow(intergenic_df)
+intergenic_peaks_perc=round((intergenic_peaks/down_peaks)*100,2)
+print(paste0("N intergenic peaks (down): ",intergenic_peaks," ", intergenic_peaks_perc))
+
+intragenic_down_df=subset(decreased_df,shortAnno!="Distal")
+intragenic_down_peaks=nrow(intragenic_down_df)
+intragenic_down_genes=length(unique(intragenic_down_df$SYMBOL))
+intragenic_down_peaks_perc=round((intragenic_down_peaks/down_peaks)*100,2)
+print(paste0("N intragenic peaks (down): ",intragenic_down_peaks," ", intragenic_down_peaks_perc))
+print(paste0("N intragenic genes (down): ",intragenic_down_genes))
+
+intron_down_peaks=nrow(subset(intragenic_down_df,shortAnno=="Intron"))
+intron_down_peaks_perc=round((intron_down_peaks/down_peaks)*100,2)
+print(paste0("N intron peaks (down): ",intron_down_peaks," ", intron_down_peaks_perc))
+
+exon_down_peaks=nrow(subset(intragenic_down_df,shortAnno=="Exon"))
+exon_down_peaks_perc=round((exon_down_peaks/down_peaks)*100,2)
+print(paste0("N exon peaks (down): ",exon_down_peaks," ", exon_down_peaks_perc))
+```
+
+HN6 only > Remove downstream > Sig only > Intragenic only
+```{r include=FALSE}
+intragenic_all_df=subset(sig_df,shortAnno!="Distal")
+intragenic_peaks_all=nrow(intragenic_all_df)
+intragenic_genes_all=length(unique(intragenic_all_df$SYMBOL))
+intragenic_genes_down=length(unique(intragenic_down_df$SYMBOL))
+
+print(paste0("N peaks intragenic (all): ",intragenic_peaks_all))
+print(paste0("N genes intragenic (all): ",intragenic_genes_all))
+print(paste0("N genes intragenic (down): ",intragenic_genes_down))
+```
+
+
+HN6 only > Remove downstream > Sig only > Intragenic down > found in RNA
+```{r include=FALSE}
+# pull rna exp info
+cutrun_rna_df=subset(intragenic_down_df,flag_rna %in% c("N","Y"))
+cutrun_rna_peaks=nrow(cutrun_rna_df)
+cutrun_rna_genes=length(unique(cutrun_rna_df$SYMBOL))
+
+mrna_genes_up=length(unique(subset(cutrun_rna_df,mrna_dir=="increase")$SYMBOL))
+mrna_genes_up_perc=round((mrna_genes_up/cutrun_rna_genes)*100,2)
+mrna_genes_down=length(unique(subset(cutrun_rna_df,mrna_dir=="decrease")$SYMBOL))
+mrna_genes_down_perc=round((mrna_genes_down/cutrun_rna_genes)*100,2)
+mrna_genes_neutral=length(unique(subset(cutrun_rna_df,mrna_dir=="neutral")$SYMBOL))
+mrna_genes_neutral_perc=round((mrna_genes_neutral/cutrun_rna_genes)*100,2)
+
+print(paste0("N peaks with exp data: ",cutrun_rna_peaks))
+print(paste0("N genes with exp data: ",cutrun_rna_genes))
+
+print(paste0("N peaks with mrna: ",cutrun_rna_peaks))
+print(paste0("N genes with mrna: ",cutrun_rna_genes))
+print(paste0("N genes with mrna up: ",mrna_genes_up, " ", mrna_genes_up_perc))
+print(paste0("N genes with mrna down: ",mrna_genes_down, " ", mrna_genes_down_perc))
+print(paste0("N genes with mrna neutral: ",mrna_genes_neutral, " ", mrna_genes_neutral_perc))
+
+# output df for deeptools to use
+out_df=data.frame(cutrun_rna_df$peakID)
+out_df = tidyr::separate(out_df,"cutrun_rna_df.peakID",c("chr","loc"),":")
+out_df = tidyr::separate(out_df,"loc",c("start","end"),"-")
+
+fpath=paste0(output_dir,"contrast_deeptools_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_rna_PIE53.bed")
+write.table(out_df,fpath)
+```
+
+HN6 only > Remove downstream > Sig only > Intragenic down > Immune genes
+```{r include=FALSE}
+immune_df=subset(intragenic_down_df,immune_list !="N")
+immune_peaks=nrow(immune_df)
+immune_genes=length(unique(immune_df$SYMBOL))
+
+print(paste0("N peaks with immune: ",immune_peaks))
+print(paste0("N genes with immune: ",immune_genes))
+```
+
+HN6 only > Remove downstream > Sig only > Intragenic down > Immune genes > found in RNA
+```{r include=FALSE}
+mrna_immune_df=subset(immune_df,flag_rna %in% c("N","Y"))
+immune_mrna_peaks=nrow(mrna_immune_df)
+immune_mrna_genes=length(unique(mrna_immune_df$SYMBOL))
+
+print(paste0("N peaks with immune with mrna: ",immune_mrna_peaks))
+print(paste0("N genes with immune with mrna: ",immune_mrna_genes))
+
+immune_mrna_genes_up=length(unique(subset(mrna_immune_df,mrna_dir=="increase")$SYMBOL))
+immune_mrna_genes_up_perc=round((immune_mrna_genes_up/immune_mrna_genes)*100,2)
+immune_mrna_genes_down=length(unique(subset(mrna_immune_df,mrna_dir=="decrease")$SYMBOL))
+immune_mrna_genes_down_perc=round((immune_mrna_genes_down/immune_mrna_genes)*100,2)
+immune_mrna_genes_neutral=length(unique(subset(mrna_immune_df,mrna_dir=="neutral")$SYMBOL))
+immune_mrna_genes_neutral_perc=round((immune_mrna_genes_neutral/immune_mrna_genes)*100,2)
+
+print(paste0("N genes with mrna up: ",
+             immune_mrna_genes_up, " ", immune_mrna_genes_up_perc))
+print(paste0("N genes with mrna down: ",
+             immune_mrna_genes_down, " ", immune_mrna_genes_down_perc))
+print(paste0("N genes with mrna neutral: ",
+             immune_mrna_genes_neutral, " ", immune_mrna_genes_neutral_perc))
+```
+
+# Fig Stats
+```{r echo=FALSE, include=FALSE}
+total_raw_peaks
+down_peaks
+down_peaks_perc
+intergenic_peaks_perc
+intragenic_down_genes
+intragenic_down_peaks_perc
+intron_down_peaks_perc
+exon_down_peaks_perc
+
+intragenic_genes_all
+intragenic_peaks_all
+intragenic_genes_down
+cutrun_rna_peaks
+cutrun_rna_genes
+mrna_genes_up
+mrna_genes_up_perc
+mrna_genes_down
+mrna_genes_down_perc
+mrna_genes_neutral
+mrna_genes_neutral_perc
+
+intragenic_down_genes
+immune_genes
+immune_peaks
+
+immune_mrna_genes_up_perc
+immune_mrna_genes_up
+immune_mrna_genes_down_perc
+immune_mrna_genes_down
+immune_mrna_genes_neutral_perc
+immune_mrna_genes_neutral
+```
+
+## New stats
+
+The total number of peaks identified in HN6 cells was `r total_raw_peaks`. Of these peaks, the majority (`r down_peaks` peaks, `r down_peaks_perc`% of total at baseline) were significantly decreased in the SMYD3 KO cells (FDRr 0.05), suggesting that SMYD3 has a predominant role as a positive regulator of H4K20me3 genomic deposition (Fig.3B). `r intergenic_peaks_perc` of the differentially decreased peaks were distributed in intergenic regions and `r intragenic_down_peaks_perc`% in intragenic regions, including `r intron_down_peaks_perc`% in introns, `r exon_down_peaks_perc`% in exons, and the remainder in promoters, TSS, 5’UTR and 3’UTR regions (Fig. 3B). We further focused our analysis on intragenic regions, given that the intragenic presence of H4K20me3 could directly contribute to the transcriptional repression of these genes. `r intragenic_genes_all` genes were annotated to `r intragenic_peaks_all` H4K20me3 intragenic peaks overlapping with promoters, TSS, gene body and UTR regions, and of these genes, most of them (`r intragenic_genes_down` genes) were annotated to decreased H4K20me3 peaks (Supplementary Fig. 17A). Among these genes, `r cutrun_rna_peaks` were annotated to `r cutrun_rna_genes` differential H4K20me3 peaks and had evaluable RNA-seq data (Fig.3C, left panel, Supplementary Fig. 17B). Of these `r cutrun_rna_genes` genes, `r mrna_genes_up_perc`% (`r mrna_genes_up`) demonstrated increased mRNA expression, signifying that SMYD3-mediated H4K20me3 is important in repressing these genes. `r mrna_genes_down_perc`% of these genes (`r mrna_genes_down`) had decreased mRNA expression, and `r mrna_genes_neutral_perc` (`r mrna_genes_neutral`) showed no expression changes (FDRr 0.1, absolute log2FC > 1.3) (Fig.3C, right panel).
+
+Amongst the `r intragenic_down_genes` genes with decreased H4K20me3 peaks, `r immune_genes` immune-related genes were annotated to `r immune_peaks` decreased H4K20me3 peaks (Supplementary Fig. 17C, Fig. 3E, Supplementary Table 5). Of these, `r immune_mrna_genes` genes were annotated to `r immune_mrna_peaks` differential H4K20me3 peaks and had evaluable RNA-seq data available (Fig.3D, left panel, Supplementary Fig.17D), and `r immune_mrna_genes_up_perc`% (`r immune_mrna_genes_up`) were upregulated, `r immune_mrna_genes_down_perc`% (`r immune_mrna_genes_down`) were downregulated and `r immune_mrna_genes_neutral_perc`% (`r immune_mrna_genes_neutral`) were unaltered (Fig. 3D, right panel).
+
+## Old stats
+
+The total number of peaks identified in HN6 cells was 53631. Of these peaks, the majority (49,120 peaks, 92% of total at baseline) were significantly decreased in the SMYD3 KO cells (FDR<0.05), suggesting that SMYD3 has a predominant role as a positive regulator of H4K20me3 genomic deposition (Fig.3B). 38% of the differentially decreased peaks were distributed in intergenic regions and 62% in intragenic regions, including 28% in introns, 21% in exons, and the remainder in promoters, TSS, 5’UTR and 3’UTR regions (Fig. 3B). We further focused our analysis on intragenic regions, given that the intragenic presence of H4K20me3 could directly contribute to the transcriptional repression of these genes. 8,373 genes were annotated to 30,436 H4K20me3 intragenic peaks overlapping with promoters, TSS, gene body and UTR regions, and of these genes, most of them (8,317 genes) were annotated to decreased H4K20me3 peaks (Supplementary Fig. 17A). Among these genes, 4,430 were annotated to 15,247 differential H4K20me3 peaks and had evaluable RNA-seq data (Fig.3C, left panel, Supplementary Fig. 17B). Of these 4,430 genes, 39% (1,751) demonstrated increased mRNA expression, signifying that SMYD3-mediated H4K20me3 is important in repressing these genes. 28% of these genes (1,267) had decreased mRNA expression, and 31% (1,378) showed no expression changes (FDR<0.1, absolute log2FC > 1.3) (Fig.3C, right panel).
+
+Amongst the 8,317 genes with decreased H4K20me3 peaks, 57 immune-related genes were annotated to 87 decreased H4K20me3 peaks (Supplementary Fig. 17C, Fig. 3E, Supplementary Table 5). Of these, 50 genes were annotated to 65 differential H4K20me3 peaks and had evaluable RNA-seq data available (Fig.3D, left panel, Supplementary Fig.17D), and 86% (43) were upregulated, 4% (2) were downregulated and 10% (5) were unaltered (Fig. 3D, right panel).
