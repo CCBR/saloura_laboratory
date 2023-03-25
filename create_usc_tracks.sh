@@ -58,7 +58,7 @@ project_dir="/data/CUTRUN/analysis/$project_id"
 track_info="$project_dir/track_info.txt"
 
 analysis_dir="/data/CUTRUN/analysis/$dir_loc/results"
-bed_graph_file="${analysis_dir}/peaks/contrasts/bed_bedgraph_paths.tsv"
+bed_graph_file="${analysis_dir}/peaks/.05/contrasts/bed_bedgraph_paths.tsv"
 bigwig_dir="$analysis_dir/bigwig"
 
 track_dir="/data/CUTRUN/datashare/CCBR/${project_id}"
@@ -122,7 +122,7 @@ run_comparison_tracks (){
     complete_sample_id="${sample_id}__${dedup_type}__${peak_type}"
     
     #create hard links
-    source_loc="${analysis_dir}/peaks/contrasts/${complete_sample_id}/${complete_sample_id}_fragmentsbased_diffresults.bigbed "
+    source_loc="${analysis_dir}/peaks/0.05/contrasts/${complete_sample_id}/${complete_sample_id}_fragmentsbased_diffresults.bigbed "
     link_loc="${track_dir}/bigbed/${complete_sample_id}_fragmentsbased_diffresults.bigbed"
     if [[ ! -f $link_loc ]]; then ln $source_loc $link_loc; fi
 

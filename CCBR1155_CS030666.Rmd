@@ -67,6 +67,11 @@ method="fragments" #AUC or fragments
 dedup_status="dedup"
 scalesfbymean="Y"
 rawcountsprescaled="N"
+sample_consensus_threshold=0.1
+read_minimum_threshold=10
+
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
 
 # reference info
 if (species=="Homo Sapiens"){
@@ -148,96 +153,50 @@ Reviewing sample QC allows us to determine if there are outliers present in anal
 
 #### siNC_H3K27me3_vs_siSmyd3_H3K27me3
 ```{r qc1, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c()
-contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3"
-norm_type_cutandrun="broadGo_peaks"
-
-peak_anno_1=main_prep_qc_core(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_core(contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3",
+                            peak_type="broadGo_peaks")
+chipseeker_plots(peak_anno)
 ```
 
 #### siNC_H3K4me3_vs_siSmyd3_H3K4me3
 ```{r qc2, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c()
-contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3"
-norm_type_cutandrun="narrowGo_peaks"
-
-peak_anno_2=main_prep_qc_core(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_core(contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3",
+                            peak_type="narrowGo_peaks")
+chipseeker_plots(peak_anno)
 ```
 
 #### siNC_H4K20me3_vs_siSmyd3_H4K20me3
 ```{r qc3, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c()
-contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3"
-norm_type_cutandrun="broadGo_peaks"
-
-peak_anno_3=main_prep_qc_core(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_core(contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3",
+                            peak_type="broadGo_peaks")
+chipseeker_plots(peak_anno)
 ```
 
 ## **Data Processing**
 Reviewing counts of significant peaks guides analysis parameters downstream.
 
 ```{r collapsedf, echo=FALSE, warning=FALSE, message=FALSE}
-#read gene list
-gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
-
-##########################################################################################
-# create significant gene lists
-contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3"
-norm_type_cutandrun="broadGo_peaks"
-merged_sig_df=create_sig_df(contrast_id,norm_type_cutandrun)
-
-contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3"
-norm_type_cutandrun="narrowGo_peaks"
+# create significant peak tables per contrast
+merged_sig_df=create_sig_contrast_df(contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3",
+                                     peak_type="broadGo_peaks",
+                                     gene_list_name=c("APM","IFNalpha"))
 merged_sig_df=rbind(merged_sig_df,
-                        create_sig_df(contrast_id,norm_type_cutandrun))
+                        create_sig_contrast_df(contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3",
+                                               peak_type="narrowGo_peaks",
+                                               gene_list_name=c("APM","IFNalpha")))
 
-contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3"
-norm_type_cutandrun="broadGo_peaks"
 merged_sig_df=rbind(merged_sig_df,
-                        create_sig_df(contrast_id,norm_type_cutandrun))
+                        create_sig_contrast_df(contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3",
+                                               peak_type="broadGo_peaks",
+                                               gene_list_name=c("APM","IFNalpha")))
+# collapse peaks per sample
+create_collapsed_sample_df(contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3")
+create_collapsed_sample_df(contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3")
+create_collapsed_sample_df(contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3")
 
-# collapse counts
-collapsed_df=create_sig_collapsed_df(merged_sig_df)
-
-##########################################################################################
-# create nonsignificant gene lists
-contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3"
-norm_type_cutandrun="broadGo_peaks"
-merged_nonsig_df=create_nonsig_df(contrast_id,norm_type_cutandrun)
-
-contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3"
-norm_type_cutandrun="narrowGo_peaks"
-merged_nonsig_df=rbind(merged_nonsig_df,
-                        create_nonsig_df(contrast_id,norm_type_cutandrun))
-
-contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3"
-norm_type_cutandrun="broadGo_peaks"
-merged_nonsig_df=rbind(merged_nonsig_df,
-                        create_nonsig_df(contrast_id,norm_type_cutandrun))
-# collapse counts
-collapsed_df=create_nonsig_collapsed_df(merged_nonsig_df)
+# collapse significant peak tables per contrast to annotation level
+create_collapsed_contrast_df(merged_sig_df)
 ```
-
-Review summary annotation for all peaks.
-
-### siNC_H3K27me3_vs_siSmyd3_H3K27me3
-
-```{r graphics1,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_1)
-```
-
-### siNC_H3K4me3_vs_siSmyd3_H3K4me3
-
-```{r graphics2,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_2)
-```
-
-### siNC_H4K20me3_vs_siSmyd3_H4K20me3
-
-```{r graphics3,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_3)
-```
-
 
 ## **Volcano Plots**
 
@@ -245,27 +204,21 @@ Volcano plots are created to show the statistical significance (FDR) versus magn
 
 ### siNC_H3K27me3_vs_siSmyd3_H3K27me3 {.tabset}
 ```{r, v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3"
-gene_list_name=c("APM","INFalpha")
 generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
+                       contrast_id="siNC_H3K27me3_vs_siSmyd3_H3K27me3",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
 ### siNC_H3K4me3_vs_siSmyd3_H3K4me3 {.tabset}
-```{r, v2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3"
-gene_list_name=c("APM","INFalpha")
+```{r, v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
+                       contrast_id="siNC_H3K4me3_vs_siSmyd3_H3K4me3",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
 ### siNC_H4K20me3_vs_siSmyd3_H4K20me3 {.tabset}
-```{r, v3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3"
-gene_list_name=c("APM","INFalpha")
+```{r, v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
+                       contrast_id="siNC_H4K20me3_vs_siSmyd3_H4K20me3",
+                       gene_list_name=c("APM","IFNalpha"))
 ```

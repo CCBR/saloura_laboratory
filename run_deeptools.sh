@@ -18,63 +18,16 @@ center_type="center"
 module load deeptools bedtools
 
 # Example Usage
-# sh run_deeptools.sh CS031014 two genomic_regions
-# sh run_deeptools.sh CS031308 two genomic_regions
 # sh run_deeptools.sh CS029758 NA genomic_regions 15000
 # sh run_deeptools.sh CS029758 NA immune_genes 15000
 ##################################################################
 # Set samples
 ##################################################################
-if [[ $cs_id == "CS031014" ]]; then
-	carlisle_id="carlisle_221206"
-    deep_id="deeptools_230125"
-
-	if [[ $sampleid == "one" ]]; then
-		f_list=("53_H3K4me3_1" "53_H3K4me3_2" "53_H3K4me3_3" "HN6_H3K4me3_1" "HN6_H3K4me3_2" "HN6_H3K4me3_3")
-		l_list=("5-3_Rep1" "5-3_Rep2" "5-3_Rep3" "HN6_Rep1" "HN6_Rep2" "HN6_Rep3")
-		type="narrowGo"
-		f_id="53_H3K4me3_vs_HN6_H3K4me3"
-		f_id1="53_H3K4me3"
-		f_id2="HN6_H3K4me3"
-	else
-		f_list=("53_H4K20m3_1" "53_H4K20m3_2" "53_H4K20m3_3" "HN6_H4K20me3_1" "HN6_H4K20me3_2" "HN6_H4K20me3_3")
-		l_list=("5-3_Rep1" "5-3_Rep2" "5-3_Rep3" "HN6_Rep1" "HN6_Rep2" "HN6_Rep3")
-		type="broadGo"
-		f_id="53_H4K20m3_vs_HN6_H4K20me3"
-		f_id1="53_H4K20m3"
-		f_id2="HN6_H4K20me3"
-	fi
-elif [[ $cs_id == "CS031308" ]]; then
-	carlisle_id="carlisle_221226"
-    deep_id="deeptools_230125"
-
-	if [[ $sampleid == "one" ]]; then
-		f_list=("53_INFB_SMYD3_1" "53_INFB_SMYD3_2" "53_INFB_SMYD3_3" "HN6_INFB_SMYD3_1" "HN6_INFB_SMYD3_2" "HN6_INFB_SMYD3_3")
-		l_list=("5-3_Rep1" "5-3_Rep2" "5-3_Rep3" "HN6_Rep1" "HN6_Rep2" "HN6_Rep3")
-		type="narrowGo"
-		f_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-		f_id1="53_INFB_SMYD3"
-		f_id2="HN6_INFB_SMYD3"
-	else
-		f_list=("53_INFB_UHRF1_1" "53_INFB_UHRF1_1" "53_INFB_UHRF1_1" "HN6_INFB_UHRF1_1" "HN6_INFB_UHRF1_1" "HN6_INFB_UHRF1_1")
-		l_list=("5-3_Rep1" "5-3_Rep2" "5-3_Rep3" "HN6_Rep1" "HN6_Rep2" "HN6_Rep3")
-		type="narrowGo"
-		f_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
-		f_id1="53_INFB_UHRF1"
-		f_id2="HN6_INFB_UHRF1"
-	fi
-elif [[ $cs_id == "CS029758" ]]; then
+if [[ $cs_id == "CS029758" ]]; then
 	carlisle_id="carlisle_230111"
-    deep_id="deeptools_230125"
-	gene_list_genomic="/data/CUTRUN/analysis/CS029758/r_analysis_230129/deeptools_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb.csv"
-	gene_list_immunogenic="/data/CUTRUN/analysis/CS029758/deeptools_230125/immune_genes.txt"
-
-    # f_list=("53_H4K20me3_IFNb_1" "53_H4K20me3_IFNb_2" "53_H4K20me3_IFNb_3" "HN6_H4K20me3_IFNb_1" "HN6_H4K20me3_IFNb_2" "HN6_H4K20me3_IFNb_3")
-	# l_list=("5-3_Rep1" "5-3_Rep2" "5-3_Rep3" "HN6_Rep1" "HN6_Rep2" "HN6_Rep3")
-	# type="broadGo"
-	# f_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"
-	# f_id1="53_H4K20me3_IFNb"
-	# f_id2="HN6_H4K20me3_IFNb"
+    deep_id="deeptools_230317"
+	deeptools_genomic="/data/CUTRUN/analysis/CS029758/r_analysis_230316/contrast_deeptools_rna_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53.csv"
+	deeptools_immunogenic="/data/CUTRUN/analysis/CS029758/r_analysis_230316/contrast_deeptools_rna_pi_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53.csv"
 	
     f_list=("HN6_H4K20me3_IFNb_1" "HN6_H4K20me3_IFNb_2" "HN6_H4K20me3_IFNb_3" "53_H4K20me3_IFNb_1" "53_H4K20me3_IFNb_2" "53_H4K20me3_IFNb_3" )
 	l_list=("HN6_Rep1" "HN6_Rep2" "HN6_Rep3" "5-3_Rep1" "5-3_Rep2" "5-3_Rep3")
@@ -87,10 +40,11 @@ fi
 # check gene_list
 ## gene lists allow for subsetting the heatmaps by specific locations, gene annotation type, etc
 if [[ $gene_shorthand == "genomic_regions" ]]; then
-	gene_list=$gene_list_genomic
+	deeptools_input=$deeptools_genomic
 	echo "Running genomic regions"
+
 elif [[ $gene_shorthand == "immune_genes" ]]; then
-	gene_list=$gene_list_immunogenic
+	deeptools_input=$deeptools_immunogenic
 	echo "Running immune genes"
 else
 	echo "Check shorthand"
@@ -103,6 +57,7 @@ code_dir="/data/CUTRUN/analysis/github"
 ref_dir="/data/CUTRUN/analysis/$cs_id/$deep_id/${f_id}/refs"
 deep_dir="/data/CUTRUN/analysis/$cs_id/$deep_id/${f_id}/$min_max/$gene_shorthand"
 peak_dir="/data/CUTRUN/analysis/$cs_id/$carlisle_id/results/peaks/gopeaks"
+echo "$deep_dir"
 
 project_dir="/data/CUTRUN/analysis/$cs_id/$carlisle_id/results"
 bigwig_dir="$project_dir/bigwig"
@@ -120,7 +75,6 @@ done
 ##################################################################
 # create gene GTF needed for all anlysis
 ##################################################################
-
 # create bed files  - genes only
 ## source gtf - complete annotation
 ## genes_bed is genes only
@@ -130,10 +84,12 @@ subset_bed="/data/CCBR_Pipeliner/Pipelines/CARLISLE_dev/resources/gencode_genes.
 gene_bed="/data/CCBR_Pipeliner/Pipelines/CARLISLE_dev/resources/gencode.v30.bed"
 if [[ ! -f $gene_bed ]]; then
 	echo "creating DEEPTOOLS bedfile"
-	echo "----subsetting bed"
-	awk '$3 == "gene" { print $0 }' $source_gtf > $subset_bed
+    
+    # subset for only genes, format
+    awk '$3 == "gene" { print $0 }' $source_gtf > $subset_bed
 	awk '{ print $1"\t"$4"\t"$5 }' $subset_bed > $gene_bed
-	echo "Bed here: $gene_bed"
+	
+    echo "Bed here: $gene_bed"
 fi
 
 # create bed file specifc to gene list
@@ -142,19 +98,28 @@ if [[ ! -f $genelist_specific_bed ]]; then
 
 	echo "creating DEEPTOOLS filtered bedfile"
 
-	cat $gene_list | sort | uniq > clean_list.txt
-	sed -i -e "s/\r//g" clean_list.txt
+    # create loc only bedfile
+    awk '{ print $1"\t"$4"\t"$5 }' $subset_bed > tmp.bed
 
-	grep -f clean_list.txt $subset_bed | awk '{ print $1"\t"$4"\t"$5 }' > $genelist_specific_bed
+    # convert output of R to bed file
+    awk -F"," '{ print $2"\t"$3"\t"$4 }' $deeptools_input | tail -n +2 | sed -s "s/\"//g" > tmp_list.bed
+
+    # interset for gene list
+    bedtools intersect -wa -a tmp.bed -b tmp_list.bed > $genelist_specific_bed
+
+    # preview and remove tmps
 	echo "Bed here: $genelist_specific_bed"
-	head $genelist_specific_bed
-	rm clean_list.txt
+    head $genelist_specific_bed
+	rm tmp.bed tmp_list.bed
 fi
 
 # for center algorithm, create genelist_specific_bed relative to the sample
 sample_genelist_specific_bed="$ref_dir/${f_id}_${gene_shorthand}_samplespecific.bed"
 if [[ $center_type == "center" && ! -f $sample_genelist_specific_bed ]]; then
-	# for each sample, create bed file of genes only
+	
+    # for each sample, create bed file of locations of interst only
+    # for genomic samples this will include significant differential locations, intragenic
+    # for immune samples this will include the above set, subset for only immune-related genes
 	for s_id in ${f_list[@]}; do
 		peak_bed="$peak_dir/${s_id}*broadGo_peaks.bed"
 		sample_bed="$ref_dir/tmp/${s_id}_broadGo_peaks_genes.bed"
@@ -167,39 +132,22 @@ if [[ $center_type == "center" && ! -f $sample_genelist_specific_bed ]]; then
 
 	# merge bedfile together to create one contrast specific bed file
 	cat $ref_dir/tmp/* > $ref_dir/tmp/allsamples_genesonly.bed
-	bedtools sort -i $ref_dir/tmp/allsamples_genesonly.bed > $sample_genelist_specific_bed
-	echo "Bed here: $sample_genelist_specific_bed"
-	head $sample_genelist_specific_bed
 
 	# remove duplicated values
-	sort $sample_genelist_specific_bed | unique > $sample_genelist_specific_bed
+	sort $ref_dir/tmp/allsamples_genesonly.bed | uniq > $ref_dir/tmp/allsamples_genesonly_unique.bed
 
-	#cleanup
+    # # sort
+    bedtools sort -i $ref_dir/tmp/allsamples_genesonly_unique.bed > $sample_genelist_specific_bed
+
+	# #cleanup
+    echo "Bed here: $sample_genelist_specific_bed"
+	head $sample_genelist_specific_bed
 	rm $ref_dir/tmp/* 
 fi
 
-# ##################################################################
-# # normalize samples - NOT IN USE
-# #################################################################
-# # Normalize the bigwigs
-# #https://deeptools.readthedocs.io/en/latest/content/feature/effectiveGenomeSize.html
-# if [[ -f $deep_dir/normalize_samples ]]; then
-# 	for s_id in ${f_list[@]}; do
-# 		if [[ ! -f $deep_dir/${s_id}.bw  ]]; then
-# 			echo "--normalize $s_id"
-# 			sh="$deep_dir/sh/norm_${s_id}.sh"
-# 			echo "bamCoverage \
-# 			-b $project_dir/bam/${s_id}.dedup.bam \
-# 			-o $deep_dir/${s_id}.bw \
-# 			--normalizeUsing RPGC \
-# 			--effectiveGenomeSize 2913022398 \
-# 			--centerReads \
-# 			-p 6 2> $deep_dir/logs/${s_id}_bamCoverage.log" > $sh
-# 			sh $sh
-# 		fi
-# 	done
-# fi
-
+##################################################################
+# Compute Matrix
+##################################################################
 submit_batch(){
 	if [[ $gene_shorthand == "immune_genes" ]]; then
 		sbatch --cpus-per-task=8 --verbose \
@@ -213,25 +161,22 @@ submit_batch(){
 		--error=$deep_dir/sh/%j.err $sh
 	fi
 }
-##################################################################
-# Compute Matrix
-##################################################################
 sample_genelist_specific_bed="$ref_dir/${f_id}_${gene_shorthand}_samplespecific.bed"
-if [[ -f $bigwig_dir/${f_id1}_1.dedup.bigwig && ! -f $deep_dir/gz/${f_id}__dedup__${type}.gz ]]; then
-	echo "--matrix $f_id full"
-	sh="$deep_dir/sh/matrix_${f_id}.sh"
+# if [[ -f $bigwig_dir/${f_id1}_1.dedup.bigwig && ! -f $deep_dir/gz/${f_id}__dedup__${type}.gz ]]; then
+# 	echo "--matrix $f_id full"
+# 	sh="$deep_dir/sh/matrix_${f_id}.sh"
 
-	echo "#!/bin/sh
-	module load deeptools
-	computeMatrix reference-point \
-		--referencePoint $center_type -b $min_max -a $min_max -p 6 \
-		-R $sample_genelist_specific_bed \
-		-S $bigwig_dir/${f_id1}*.dedup.bigwig $bigwig_dir/${f_id2}*.dedup.bigwig  \
-		-o $deep_dir/gz/${f_id}__dedup__${type}.gz \
-		--missingDataAsZero --skipZeros --sortRegions descend \
-		--outFileSortedRegions $deep_dir/bed/${f_id}_regions_$center_type__dedup__${type}.bed"  > $sh
-	#submit_batch $sh
-fi
+# 	echo "#!/bin/sh
+# 	module load deeptools
+# 	computeMatrix reference-point \
+# 		--referencePoint $center_type -b $min_max -a $min_max -p 6 \
+# 		-R $sample_genelist_specific_bed \
+# 		-S $bigwig_dir/${f_id1}*.dedup.bigwig $bigwig_dir/${f_id2}*.dedup.bigwig  \
+# 		-o $deep_dir/gz/${f_id}__dedup__${type}.gz \
+# 		--missingDataAsZero --skipZeros --sortRegions descend \
+# 		--outFileSortedRegions $deep_dir/bed/${f_id}_regions_$center_type__dedup__${type}.bed"  > $sh
+# 	submit_batch $sh
+# fi
 
 if [[ -f $bigwig_dir/${f_id1}_1.dedup.bigwig && ! -f $deep_dir/gz/${f_id}__dedup__${type}_single.gz ]]; then
 	echo "--matrix $f_id single"
@@ -246,8 +191,11 @@ if [[ -f $bigwig_dir/${f_id1}_1.dedup.bigwig && ! -f $deep_dir/gz/${f_id}__dedup
 		-o $deep_dir/gz/${f_id}__dedup__${type}_single.gz \
 		--missingDataAsZero --skipZeros --sortRegions descend \
 		--outFileSortedRegions $deep_dir/bed/${f_id}_regions_$center_type__dedup__${type}_single.bed"  > $sh
-	submit_batch $sh
+	# submit_batch $sh
+	sh $sh
 fi
+
+
 ##################################################################
 # Summary
 ##################################################################
@@ -304,74 +252,34 @@ if [[ -f $deep_dir/summary/${f_id}_scores_per_bin.npz && ! -f $deep_dir/plots/${
 	sh $sh
 fi 
 
-if [[ -f $deep_dir/summary/${f_id}_scores_per_bin_single.npz && ! -f $deep_dir/plots/${f_id}_profile_single.png ]]; then
-	echo "--plot1 $f_id single"
-	sh="$deep_dir/sh/plot1_${f_id}_single.sh"
-	echo "
-    plotProfile \
-	-m $deep_dir/gz/${f_id}__dedup__${type}_single.gz \
-	-out $deep_dir/plots/${f_id}_profile_single.png \
-	--perGroup \
-	--colors green red \
-	--samplesLabel "${l_list[0]} ${l_list[3]}" \
-	--refPointLabel "$center_type" \
-	-T \"Read density\" \
-	-z \"\"" > $sh
-	sh $sh
+if [[ -f $deep_dir/summary/${f_id}_scores_per_bin_single.npz ]]; then
+	if [[ ! -f $deep_dir/plots/${f_id}_profile_single.png ]]; then
+        echo "--plot1 $f_id single"
+        sh="$deep_dir/sh/plot1_${f_id}_single.sh"
+        echo "
+        plotProfile \
+        -m $deep_dir/gz/${f_id}__dedup__${type}_single.gz \
+        -out $deep_dir/plots/${f_id}_profile_single.png \
+        --perGroup \
+        --colors green red \
+        --samplesLabel "${l_list[0]} ${l_list[3]}" \
+        --refPointLabel "$center_type" \
+        -T \"Read density\" \
+        -z \"\"" > $sh
+        sh $sh
+    fi
 	
-	# echo "--plot2 $f_id single"
-	# sh="$deep_dir/sh/plot2_${f_id}_single.sh"
-	# echo "
-    # plotHeatmap \
-	# -m $deep_dir/gz/${f_id}__dedup__${type}_single.gz \
-	# --samplesLabel "${l_list[0]} ${l_list[3]}" \
-	# --colorList white,red \
-	# -out $deep_dir/plots/${f_id}_heatmap_single.png"  > $sh
-	# sh $sh
-
-	echo "--plot2 $f_id single"
-	sh="$deep_dir/sh/plot2_${f_id}_single.sh"
-	echo "
-    plotHeatmap \
-	-m $deep_dir/gz/${f_id}__dedup__${type}_single.gz \
-	--yMax 40 40 \
-	--samplesLabel "${l_list[0]} ${l_list[3]}" \
-	--colorList white,red \
-	--heatmapHeight 5 \
-	--heatmapWidth 3.5 \
-	-out $deep_dir/plots/${f_id}_heatmap_single.png"  > $sh
-	sh $sh
-fi 
-##################################################################
-# plot correlation matrix
-#################################################################
-if [[ -f $deep_dir/summary/${f_id}_scores_per_bin.npz && ! -f $deep_dir/plots/${f_id}__dedup__${type}_correlation.png ]]; then
-	echo "--correlation $f_id"
-	sh="$deep_dir/sh/correlation_${f_id}.sh"
-		
-	echo "plotCorrelation \
-	--corData $deep_dir/summary/${f_id}_scores_per_bin.npz \
-	--corMethod spearman \
-	--whatToPlot heatmap \
-	--skipZeros \
-	--plotNumbers \
-	-o $deep_dir/plots/${f_id}__dedup__${type}_correlation.png" > $sh
-	sh $sh
-fi
-
-##################################################################
-# create links
-#################################################################
-if [[ -f $deep_dir/plots/${f_id}__dedup__${type}_correlation.png ]]; then
-    file_list=($deep_dir/plots/${f_id}__dedup__${type}_correlation.png $deep_dir/plots/${f_id}_heatmap.png)
-    for f in ${file_list[@]}; do
-        ln -n $f /data/CUTRUN/FINAL_ANALYSIS/$cs_id/
-    done
-fi
-
-if [[ -f $deep_dir/plots/${f_id}_heatmap_single.png ]]; then
-    file_list=($deep_dir/plots/${f_id}_heatmap_single.png)
-    for f in ${file_list[@]}; do
-        ln -n $f /data/CUTRUN/FINAL_ANALYSIS/$cs_id/
-    done
+	if [[ ! -f $deep_dir/plots/${f_id}_heatmap_single.png ]]; then
+        echo "--plot2 $f_id single"
+        sh="$deep_dir/sh/plot2_${f_id}_single.sh"
+        #  --heatmapHeight 5 --heatmapWidth 3.5 \
+        echo "
+        plotHeatmap \
+        -m $deep_dir/gz/${f_id}__dedup__${type}_single.gz \
+        --yMax 40 40 \
+        --samplesLabel "${l_list[0]} ${l_list[3]}" \
+        --colorList white,red \
+        -out $deep_dir/plots/${f_id}_heatmap_single.png"  > $sh
+        sh $sh
+    fi
 fi

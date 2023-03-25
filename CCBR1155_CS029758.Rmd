@@ -53,7 +53,7 @@ USBC Genome Tracks were created for each project. They can be accessed here:
 #paths
 parent_dir="~/../../Volumes/CUTRUN/"
 input_dir = "~/../../Volumes/CUTRUN/analysis/CS029758/"
-output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230129/"
+output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230321_newannotations/"
 output_dir=output_car_dir
 
 car_subpath=paste0(input_dir,"carlisle_230111/results/peaks/contrasts/")
@@ -77,9 +77,11 @@ dedup_status="dedup"
 scalesfbymean="Y"
 rawcountsprescaled="N"
 neg_control="HN6_igG_rabbit_1"
+sample_consensus_threshold=0.1
+read_minimum_threshold=10
 
-contrast_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
-gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR","Distal")
+gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
 
 # reference info
 if (species=="Homo Sapiens"){
@@ -93,7 +95,7 @@ ignore_groups=c()
 
 ```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
 # package list
-list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb_pkg, "UpSetR","ggupset","ggimage","grid","ggpubr")
+list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb_pkg, "UpSetR","ggupset","ggimage","grid","ggpubr","plyr","ggVennDiagram","biomaRt")
 
 #install as needed
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
@@ -116,6 +118,7 @@ if (species=="Homo Sapiens"){
 } else if (species=="Mus Musculus"){
   genome="mm10"
 }
+
 ```
 
 ## **Data Processing**
@@ -133,6 +136,8 @@ rownames(groups_df)=groups_df$sampleid
 ## if there is a subset gene list, select files
 gene_file = paste0(parent_dir,"docs/gene_list_master.csv")
 gene_df = read.csv(gene_file)
+#read gene list
+#gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
 
 # read in the contrast list
 #cp carlisle_230111/config/contrasts.tsv .
@@ -164,70 +169,54 @@ Reviewing sample QC allows us to determine if there are outliers present in anal
 
 #### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb
 ```{r qc1, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c()
-contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb"
-norm_type_cutandrun="broadGo_peaks"
-
-peak_anno_1=main_prep_qc_core(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_core(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+                            peak_type="broadGo_peaks")
+chipseeker_plots(peak_anno)
 ```
 
 #### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb
 ```{r qc2, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c()
-contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"
-norm_type_cutandrun="broadGo_peaks"
-
-peak_anno_2=main_prep_qc_core(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_core(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                            peak_type="broadGo_peaks")
+chipseeker_plots(peak_anno)
 ```
 
 ## **Data Processing**
-Reviewing counts of significant peaks guides analysis parameters downstream.
-
+Prepare peak tables for both significantly differentiated and non-significantly differentiated peaks
 ```{r collapsedf, echo=FALSE, warning=FALSE, message=FALSE}
-#read gene list
-gene_list=read.csv(paste0(parent_dir,"/docs/merged_gene_list_v2.csv"),sep=",")
+# create significant peak tables per contrast
+create_sig_contrast_df(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+                       peak_type="broadGo_peaks",
+                       gene_list_name=c("APM","IFNalpha"))
 
-##########################################################################################
-# create significant gene lists
-contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb"
-norm_type_cutandrun="broadGo_peaks"
-merged_sig_df=create_sig_df(contrast_id,norm_type_cutandrun)
+rna_path=paste0(parent_dir,"analysis/CS028891/r_analysis_230323_newannotation/",
+                "contrast_sig_CRISPR_53_with_IFNb-parental_HN6_with_IFNb.csv")
+create_sig_contrast_df(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                       peak_type="broadGo_peaks",
+                       gene_list_name=c("APM","IFNalpha"),
+                       rna_seq_path=rna_path)
 
-contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"
-norm_type_cutandrun="broadGo_peaks"
-merged_sig_df=rbind(merged_sig_df,
-                        create_sig_df(contrast_id,norm_type_cutandrun))
+# collapse peaks per sample
+create_collapsed_sample_df(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb")
+create_collapsed_sample_df(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb")
 
-# collapse counts
-collapsed_df=create_sig_collapsed_df(merged_sig_df)
-
-##########################################################################################
-# create nonsignificant gene lists
-contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb"
-norm_type_cutandrun="broadGo_peaks"
-merged_nonsig_df=create_nonsig_df(contrast_id,norm_type_cutandrun)
-
-contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"
-norm_type_cutandrun="broadGo_peaks"
-merged_nonsig_df=rbind(merged_nonsig_df,
-                        create_nonsig_df(contrast_id,norm_type_cutandrun))
-
-# collapse counts
-collapsed_df=create_nonsig_collapsed_df(merged_nonsig_df)
+# collapse significant peak tables per contrast to annotation level
+create_collapsed_contrast_df(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb")
+create_collapsed_contrast_df(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb")
 ```
 
-Review summary annotation for all peaks.
+## **Peak Distributions**
 
-### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb
+Create pie charts per sample, per contrast, and differentiated by +/- log2FC
 
-```{r graphics1,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_1)
+### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb {.tabset}
+```{r, pie1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_piecharts(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb")
 ```
 
-### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb
-
-```{r graphics2,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_2)
+### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb {.tabset}
+```{r, pie2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_piecharts(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb")
 ```
 
 ## **Volcano Plots**
@@ -236,140 +225,186 @@ Volcano plots are created to show the statistical significance (FDR) versus magn
 
 ### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb {.tabset}
 ```{r, v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb"
-gene_list_name=c("APM","IFNalpha")
 generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
+                       contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
 ### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb {.tabset}
 ```{r, v2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"
-gene_list_name=c("APM","IFNalpha")
 generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
-```
-
-## **Heatmap**
-```{r, h1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb"
-gene_list=subset(gene_df,Set %in%c("APM","IFNalpha"))$Human
-main_differential_genes(contrast_id,contrast_list)
-generate_heat_map_differential(contrast_id=contrast_id,
-                               n_up=5,
-                               n_down=5,
-                               fshort="test",
-                               gene_list_flag="ON")
-```
-
-```{r, h2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"
-gene_list=subset(gene_df,Set %in%c("APM","IFNalpha"))$Human
-main_differential_genes(contrast_id,contrast_list)
-generate_heat_map_differential(contrast_id=contrast_id,
-                               n_up=5,
-                               n_down=5,
-                               fshort="test",
-                               gene_list_flag="ON")
+                       contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
 ## **Sample Heatmap**
+
+### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb {.tabset}
 ```{r, sh1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb"
 sample_sub_list=c("HN6_H3K27me3_IFNb_1","HN6_H3K27me3_IFNb_2",
                   "53_H3K27me3_IFNb_1","53_H3K27me3_IFNb_2")
 # ALL GENES
-generate_replicate_heatmaps(contrast_id=contrast_id,
-                            peak_type="broadGo",
-                            scale="ON",
-                            sample_subset=sample_sub_list)
-# Immune genes
-gene_list_name="APM_INFA"
-gene_list=subset(gene_df,Set %in% c("APM","IFNalpha"))$Human
-generate_replicate_heatmaps(contrast_id=contrast_id,
-                            peak_type="broadGo",
-                            scale="ON",
-                            gene_list_subset=gene_list,
-                            sample_subset=sample_sub_list)
-gene_list_name="INFA"
-gene_list=subset(gene_df,Set %in% c("IFNalpha"))$Human
-generate_replicate_heatmaps(contrast_id=contrast_id,
-                            peak_type="broadGo",
-                            scale="ON",
-                            gene_list_subset=gene_list,
-                            sample_subset=sample_sub_list)
-gene_list_name="APM"
-gene_list=subset(gene_df,Set %in% c("APM"))$Human
-generate_replicate_heatmaps(contrast_id=contrast_id,
-                            peak_type="broadGo",
-                            scale="ON",
-                            gene_list_subset=gene_list,
-                            sample_subset=sample_sub_list)
+generate_replicate_heatmaps(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+                            scale_flag="ON",
+                            sample_subset=sample_sub_list,
+                            gene_list_name="")
 
+# subsets of gene lists
+gene_list_options=c("APM_INFA")
+for (genelistID in gene_list_options){
+  gene_list_name=genelistID
+  generate_replicate_heatmaps(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+                            scale_flag="ON",
+                            gene_list_name=genelistID,
+                            sample_subset=sample_sub_list)
+}
 ```
 
+### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb {.tabset}
 ```{r, sh2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"
-sample_sub_list=c("HN6_H4K20me3_IFNb_1","HN6_H4K20me3_IFNb_2","HN6_H4K20me3_IFNb_3",
-                  "53_H4K20me3_IFNb_1","53_H4K20me3_IFNb_2","53_H4K20me3_IFNb_3")
 sample_sub_list=c("HN6_H4K20me3_IFNb_2","HN6_H4K20me3_IFNb_3",
-                  "53_H4K20me3_IFNb_1","53_H4K20me3_IFNb_2")
+                  "53_H4K20me3_IFNb_2","53_H4K20me3_IFNb_3")
+rna_path=paste0(parent_dir,"analysis/CS028891/r_analysis_230223/",
+                "replicate_normalized_CRISPR_53_with_IFNb-parental_HN6_with_IFNb.csv")
 # ALL GENES
-generate_replicate_heatmaps(contrast_id=contrast_id,
-                            peak_type="broadGo",
-                            scale="ON",
-                            sample_subset=sample_sub_list)
-# Immune genes
-gene_list_name="APM_INFA"
-gene_list=subset(gene_df,Set %in% c("APM","IFNalpha"))$Human
-generate_replicate_heatmaps(contrast_id=contrast_id,
-                            peak_type="broadGo",
-                            scale="ON",
-                            gene_list_subset=gene_list,
-                            sample_subset=sample_sub_list)
-gene_list_name="INFA"
-gene_list=subset(gene_df,Set %in% c("IFNalpha"))$Human
-generate_replicate_heatmaps(contrast_id=contrast_id,
-                            peak_type="broadGo",
-                            scale="ON",
-                            gene_list_subset=gene_list,
-                            sample_subset=sample_sub_list)
-gene_list_name="APM"
-gene_list=subset(gene_df,Set %in% c("APM"))$Human
-generate_replicate_heatmaps(contrast_id=contrast_id,
-                            peak_type="broadGo",
-                            scale="ON",
-                            gene_list_subset=gene_list,
-                            sample_subset=sample_sub_list)
-```
+generate_replicate_heatmaps(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                           scale_flag="ON",
+                           sample_subset=sample_sub_list,
+                           gene_list_name="")
 
-## *Single sample pie charts*
-```{r, pie1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-# run function
-contrast_id=c("53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb")
-peak_type="broadGo"
-single_sample_picharts(contrast_id,peak_type,neg_control)
-main_piecharts_from_collapsed_nonsig(contrast_id)
-main_piecharts_from_collapsed_secondary(contrast_id)
-```
+# subsets of gene lists
+gene_list_options=c("APM_INFA")
+for (genelistID in gene_list_options){
+  generate_replicate_heatmaps(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                            scale_flag="ON",
+                            gene_list_name=genelistID,
+                            sample_subset=sample_sub_list)
+}
+# ALL GENES
+generate_replicate_heatmaps(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                           scale_flag="ON",
+                           sample_subset=sample_sub_list,
+                           rna_seq_path=rna_path,
+                           gene_list_name="")
 
-```{r, pie2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-# run function
-contrast_id=c("53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb")
-peak_type="broadGo"
-single_sample_picharts(contrast_id,peak_type,neg_control)
-main_piecharts_from_collapsed_nonsig(contrast_id)
-main_piecharts_from_collapsed_secondary(contrast_id)
+# subsets of gene lists
+gene_list_options=c("APM_INFA")
+for (genelistID in gene_list_options){
+  generate_replicate_heatmaps(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                            scale_flag="ON",
+                            gene_list_name=genelistID,
+                            rna_seq_path=rna_path,
+                            sample_subset=sample_sub_list)
+}
 ```
 
 ## *Intensity Boxplots*
-```{r}
-contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"
-sample_list=c("HN6_H4K20me3_IFNb_2",
-              "53_H4K20me3_IFNb_2")
-color_pal=c("black","blue")
-generate_intensity_boxplot(contrast_id,sample_list,color_pal=color_pal)
+
+### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb {.tabset}
+```{r, box1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_intensity_boxplot(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+                           sig_flag="N",
+                           gene_list_name="",
+                           scale_factor="Y")
+
+generate_intensity_boxplot(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+                           sig_flag="Y",
+                           gene_list_name="APM_INFA",
+                           scale_factor="Y")
 ```
 
+### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb {.tabset}
+```{r, box2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_intensity_boxplot(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                           sig_flag="N",
+                           gene_list_name="",
+                           scale_factor="Y")
+
+generate_intensity_boxplot(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                           sig_flag="N",
+                           gene_list_name="APM_INFA",
+                           scale_factor="Y")
+```
+
+### Combo of 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb with CS028891 53_INFB_SMYD3_vs_HN6_INFB_SMYD3
+### run with and without distal
+```{r, box3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+csid2_path=paste0(parent_dir,"analysis/CS031308/r_analysis_230307/")
+
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR","Distal")
+gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
+generate_intensity_boxplot_two_projs(contrast_id1="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                                     csid2="CS031308",
+                                     csid2_path=csid2_path,
+                                     contrast_id2="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                                     gene_list_name="")
+generate_intensity_boxplot_two_projs(contrast_id1="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                                     csid2="CS031308",
+                                     csid2_path=csid2_path,
+                                     contrast_id2="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                                     gene_list_name="APM_INFA")
+                                     
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
+generate_intensity_boxplot_two_projs(contrast_id1="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                                     csid2="CS031308",
+                                     csid2_path=csid2_path,
+                                     contrast_id2="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                                     gene_list_name="")
+generate_intensity_boxplot_two_projs(contrast_id1="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                                     csid2="CS031308",
+                                     csid2_path=csid2_path,
+                                     contrast_id2="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                                     gene_list_name="APM_INFA")
+```
+
+
+## **VENN DIAGRAMS **
+
+### Combo between 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb and CS031308 53_INFB_SMYD3_vs_HN6_INFB_SMYD3
+```{r}
+create_venn_diagrams_mult_projs(cs_id_list=c("CS029758","CS031308"),
+                                cs_id_path_list=c(output_dir,
+                                                  paste0(parent_dir,"analysis/CS031308/r_analysis_230307/")),
+                                contrast_list=c("53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                                                "53_INFB_SMYD3_vs_HN6_INFB_SMYD3"),
+                                sig_filter_list=c("Y","N"),
+                                gene_list_name="APM_INFA",
+                                gene_list_to_include="APM_IFNalpha"
+)
+```
+
+
+### Combo between 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb and CS031308 53_INFB_SMYD3_vs_HN6_INFB_SMYD3 
+### AND CS0329689 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb
+
+```{r}
+create_venn_diagrams_mult_projs(cs_id_list=c("CS029758","CS031308","CS029689"),
+                                cs_id_path_list=c(output_dir,
+                                                  paste0(parent_dir,"analysis/CS031308/r_analysis_230307/"),
+                                                  paste0(parent_dir,"analysis/CS029689/r_analysis_230314/")),
+                                contrast_list=c("53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                                                "53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                                                "5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb"),
+                                sig_filter_list=c("Y","N","N"),
+                                gene_list_name="APM_INFA",
+                                gene_list_to_include="APM_IFNalpha"
+)
+```
+
+### Combo between 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb and CS031308 53_INFB_SMYD3_vs_HN6_INFB_SMYD3 
+### AND CS0329689 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb
+
+```{r}
+create_venn_diagrams_mult_projs(cs_id_list=c("CS029758","CS031308","CS029689"),
+                                cs_id_path_list=c(output_dir,
+                                                  paste0(parent_dir,"analysis/CS031308/r_analysis_230307/"),
+                                                  paste0(parent_dir,"analysis/CS029689/r_analysis_230314/")),
+                                contrast_list=c("53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                                                "53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                                                "5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb"),
+                                sig_filter_list=c("Y","N","N"),
+                                gene_list_name="APM_INFA",
+                                gene_list_to_include="APM_IFNalpha"
+)
+```

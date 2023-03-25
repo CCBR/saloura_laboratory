@@ -19,12 +19,12 @@ rm /data/CUTRUN/analysis/CS029758/r_analysis_230129/beds/*
 
 # sample file
 echo "**sample file**"
-awk '{print $1,$2,$3}' $sample_file > /data/CUTRUN/analysis/CS029758/r_analysis_230129/beds/tmp
+awk '{print $2,$3,$4}' $sample_file > /data/CUTRUN/analysis/CS029758/r_analysis_230129/beds/tmp
 tail -n+2 /data/CUTRUN/analysis/CS029758/r_analysis_230129/beds/tmp > $sample_output
 sed -ie "s/\s/\t/g" $sample_output
 head $sample_output
 
-# contraast file
+# contrast file
 echo "**contrast file**"
 awk -F"," '{print $9,$10,$11}' $contrast_file > /data/CUTRUN/analysis/CS029758/r_analysis_230129/beds/tmp
 tail -n+2 /data/CUTRUN/analysis/CS029758/r_analysis_230129/beds/tmp > $contrast_output

@@ -23,7 +23,7 @@ This analysis report comparison two projects
 #paths
 parent_dir="~/../../Volumes/CUTRUN/"
 input_dir = "~/../../Volumes/CUTRUN/analysis/CS031308/"
-output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS031308/r_analysis_221226/"
+output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS031308/r_analysis_230307/"
 output_dir=output_car_dir
 car_subpath=paste0(input_dir,"carlisle_221226/results/peaks/contrasts/")
 img_dir=paste0(output_car_dir,"img/")
@@ -43,6 +43,11 @@ method="fragments" #AUC or fragments
 dedup_status="dedup"
 scalesfbymean="Y"
 rawcountsprescaled="N"
+sample_consensus_threshold=0.1
+read_minimum_threshold=10
+
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
 
 # reference info
 if (species=="Homo Sapiens"){
@@ -56,7 +61,7 @@ ignore_groups=c()
 
 ```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
 # package list
-list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb_pkg, "UpSetR","ggupset","ggimage")
+list.of.packages=c("DESeq2","edgeR", "tidyverse","dplyr", "DT","reshape2","pander","plotly", "ggplot2", "ggfortify", "ggrepel", "yaml", "EnhancedVolcano", "RUVSeq", "ChIPseeker", "stringr","RColorBrewer","HTSFilter","pheatmap",txdb_pkg, "UpSetR","ggupset","ggimage","grid","ggpubr","plyr")
 
 #install as needed
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
@@ -121,142 +126,99 @@ Reviewing sample QC allows us to determine if there are outliers present in anal
 
 #### 53_INFB_SMYD3_vs_HN6_INFB_SMYD3
 ```{r qc1, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c("53_INFB_SMYD3_3")
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
-
-peak_anno_1=main_prep_qc_core(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_core(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                            peak_type="narrowGo_peaks")
+chipseeker_plots(peak_anno)
 ```
 
 #### 53_INFB_UHRF1_vs_HN6_INFB_UHRF1
 ```{r qc2, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c()
-contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
-norm_type_cutandrun="narrowGo_peaks"
-
-peak_anno_2=main_prep_qc_core(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_core(contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1",
+                            peak_type="narrowGo_peaks")
+chipseeker_plots(peak_anno)
 ```
 
 #### 53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3
 ```{r qc3, echo=FALSE, warning=FALSE, message=FALSE}
-exclusion_list=c()
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
- 
-peak_anno_3=main_prep_qc_core(contrast_id,exclusion_list)
+peak_anno=main_prep_qc_core(contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3",
+                            peak_type="narrowGo_peaks")
+chipseeker_plots(peak_anno)
 ```
 
 ## **Data Processing**
-Reviewing counts of significant peaks guides analysis parameters downstream.
-
+Prepare peak tables for both significantly differentiated and non-significantly differentiated peaks
 ```{r collapsedf, echo=FALSE, warning=FALSE, message=FALSE}
-# create significant gene lists
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
-merged_sig_df=create_sig_df(contrast_id,norm_type_cutandrun)
-
-contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
-norm_type_cutandrun="narrowGo_peaks"
+# create significant peak tables per contrast
+merged_sig_df=create_sig_contrast_df(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                                     peak_type="narrowGo_peaks",
+                                     gene_list_name=c("APM","IFNalpha"))
 merged_sig_df=rbind(merged_sig_df,
-                        create_sig_df(contrast_id,norm_type_cutandrun))
-
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
+                        create_sig_contrast_df(contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1",
+                                               peak_type="narrowGo_peaks",
+                                               gene_list_name=c("APM","IFNalpha")))
 merged_sig_df=rbind(merged_sig_df,
-                        create_sig_df(contrast_id,norm_type_cutandrun))
-# collapse counts
-collapsed_df=create_sig_collapsed_df(merged_sig_df)
+                        create_sig_contrast_df(contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3",
+                                               peak_type="narrowGo_peaks",
+                                               gene_list_name=c("APM","IFNalpha")))
+# collapse peaks per sample
+create_collapsed_sample_df(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3")
+create_collapsed_sample_df(contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1")
+create_collapsed_sample_df(contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3")
 
-##########################################################################################
-# create nonsignificant gene lists
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
-merged_nonsig_df=create_nonsig_df(contrast_id,norm_type_cutandrun)
-
-contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
-norm_type_cutandrun="narrowGo_peaks"
-merged_nonsig_df=rbind(merged_nonsig_df,
-                        create_nonsig_df(contrast_id,norm_type_cutandrun))
-
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-norm_type_cutandrun="narrowGo_peaks"
-merged_nonsig_df=rbind(merged_nonsig_df,
-                        create_nonsig_df(contrast_id,norm_type_cutandrun))
-
-# collapse counts
-collapsed_df=create_nonsig_collapsed_df(merged_nonsig_df)
-
+# collapse significant peak tables per contrast to annotation level
+create_collapsed_contrast_df(merged_sig_df)
 ```
 
-Review summary annotation for all peaks.
-
-### 53_INFB_SMYD3_vs_HN6_INFB_SMYD3
-```{r graphics1,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_1)
-```
-
-### 53_INFB_UHRF1_vs_HN6_INFB_UHRF1
-```{r graphics2,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_2)
-```
-
-### 53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3
-```{r graphics3,echo=FALSE, warning=FALSE, message=FALSE}
-chipseeker_plots(peak_anno_3)
-```
 ## **Volcano Plots**
 
 Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
 
 ### 53_INFB_SMYD3_vs_HN6_INFB_SMYD3 {.tabset}
 ```{r v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-gene_list_name=c("APM","INFalpha")
 generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
+                       contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
 ### 53_INFB_UHRF1_vs_HN6_INFB_UHRF1 {.tabset}
 ```{r v2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1"
-gene_list_name=c("APM","INFalpha")
 generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
+                       contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
 ### 53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3 {.tabset}
 ```{r v3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-gene_list_name=c("APM","INFalpha")
 generate_volcano_plots(data_type="CAR",
-                       contrast_id,
-                       gene_list_in="ON")
+                       contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
-## *Intensity Boxplots*
-```{r}
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-sample_list=c("HN6_INFB_SMYD3_1","HN6_INFB_SMYD3_2","HN6_INFB_SMYD3_3",
-              "53_INFB_SMYD3_1","53_INFB_SMYD3_2","53_INFB_SMYD3_3")
-color_pal=c("black","black","black","blue","blue","blue")
-generate_intensity_boxplot(contrast_id,
-                           sample_list,
-                           color_pal=color_pal)
-contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3"
-sample_list=c("HN6_INFB_SMYD3_1",
-              "53_INFB_SMYD3_1")
-color_pal=c("black","blue")
-generate_intensity_boxplot(contrast_id,
-                           sample_list,
-                           color_pal=color_pal)
 
-contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3"
-sample_list=c("HN6_no_INFB_SMYD3_2",
-              "53_no_INFB_SMYD3_2")
-color_pal=c("black","blue")
-generate_intensity_boxplot(contrast_id,
-                           sample_list,
-                           color_pal=color_pal)
+## *Intensity Boxplots*
+
+### 53_INFB_SMYD3_vs_HN6_INFB_SMYD3 {.tabset}
+```{r, box1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_intensity_boxplot(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                           sig_flag="N",
+                           gene_list_name="",
+                           scale_factor="Y")
+
+generate_intensity_boxplot(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                           sig_flag="N",
+                           gene_list_name="APM_INFA",
+                           scale_factor="Y")
+```
+
+### 53_INFB_UHRF1_vs_HN6_INFB_UHRF1 {.tabset}
+```{r, box1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_intensity_boxplot(contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1",
+                           sig_flag="N",
+                           gene_list_name="",
+                           scale_factor="Y")
+
+generate_intensity_boxplot(contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1",
+                           sig_flag="Y",
+                           gene_list_name="APM_INFA",
+                           scale_factor="Y")
 ```

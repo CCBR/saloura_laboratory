@@ -19,7 +19,7 @@ editor_options:
 #dirs
 parent_dir="~/../../../Volumes/CUTRUN/"
 input_dir = "~/../../../Volumes/CUTRUN/analysis/CS028891/pipeliner_220713/"
-output_rna_dir = "~/../../../Volumes/CUTRUN/analysis/CS028891/r_analysis_221223/"
+output_rna_dir = "~/../../../Volumes/CUTRUN/analysis/CS028891/r_analysis_230323_newannotation/"
 output_dir=output_rna_dir
 
 img_dir=paste0(output_rna_dir,"img/")
@@ -34,12 +34,18 @@ ignore_groups=""
 
 #cntrl
 cntrl="parental_HN6_with_IFNb"
+csid="CS028891"
 
 # Threshold values
 log2fc_cutoff=0.3785 #FC of 1.3
-padj_cutoff=0.05
+padj_cutoff=0.1
 species_in = "Homo sapiens" #either "Homo sapiens" or "Mus musculus"
 analysis_type = "DESeq2" #either limma or DESeq2
+sample_consensus_threshold=0.1
+read_minimum_threshold=10
+
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
 
 #databases to include in analysis options include:
 #http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
@@ -84,9 +90,6 @@ invisible(lapply(list.of.packages, library, character.only = TRUE))
 ####################
 # run metadata input
 ####################
-#id counts fil
-RSEM_file = "RawCountFile_RSEM_genes.txt" #normalized count file
-
 #groups input
 groups_df = read.csv(paste0(input_dir,"groups.tab"),sep="\t",header = FALSE)[,c("V1","V2")]
 colnames(groups_df) = c("sampleid","group")
@@ -120,72 +123,71 @@ DT::datatable(contrast_df)
 
 Raw counts are read in and filtered by counts per million reads (CPM). Filtering thresholds are set such that at least two samples must have a CPM of >0.5 to be reviewed. Two plots were generated for each sample: Relative log expression (RLE) plots and Principal Coordinate Analysis (PCA) plots.
 
-```{r raw_run, echo=FALSE, warning=FALSE, message=FALSE}
-#load counts
-raw_counts= read.csv(paste0(input_dir,"DEG_ALL/",RSEM_file),sep="\t")
-raw_counts=raw_counts[,c("symbol",groups_df$sampleid)]
+- Upper quantile normalization was attempted. This provided some correction, however, variance is still not near 0 in some samples.
 
-## Filter by CPM
-#CPM is calcualted as "how many counts would I get for a gene if the sample had a library size of 1M".
-raw_counts=column_to_rownames(raw_counts)
-raw_counts=ceiling(raw_counts)
-cpm_counts=edgeR::cpm(as.matrix(raw_counts))
-log_cpm_counts=log2(cpm_counts)
-keep=rowSums(cpm_counts>0.5)>2
+- Finally, DESEQ2 normalization was attempted. This provided the best correction and was selected as the normalization technique.
 
-filtered=raw_counts[keep,]
-colnames(filtered)=shorten_names(colnames(filtered))
+```{r qc, echo=FALSE, warning=FALSE, message=FALSE}
+main_prep_qc_rna_core(flag_type="pre_norm")
 
-#set colors
-colors <- brewer.pal(6, "Set2")
-x=shorten_names(groups_df$group)
-x=as.factor(x)#set pheno data
+main_prep_qc_rna_core(flag_type="upper")
 
-#Plot results
-par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
-plotRLE(as.matrix(filtered), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
-plotPCA(as.matrix(filtered), col=colors[x], cex=.8)
-mtext("Fig. Before Normalization", side=2, outer=TRUE, adj=0)
+main_prep_qc_rna_core(flag_type="DESEQ2")
 ```
 
-Upper quantile normalization was attempted. This provided some correction, however, variance is still not near 0 in some samples.
-
-```{r upper, echo=FALSE}
-#merge into object
-set <- newSeqExpressionSet(as.matrix(filtered),
-                           phenoData = data.frame(x, row.names=colnames(filtered)))
-set_u <- betweenLaneNormalization(set, which="upper")
-par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
-plotRLE(set_u, outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
-plotPCA(set_u, col=colors[x], cex=.8)
-mtext("Fig. UpperQuant Normalization", side=2, outer=TRUE, adj=0)
+```{r}
+# create sig df
+sigpath=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230321_newannotations/",
+                 "contrast_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53.csv")
+create_sig_RNA_df(contrast_id="CRISPR_53_with_IFNb-parental_HN6_with_IFNb",
+                       car_sig_path=sigpath)
+create_sig_RNA_df(contrast_id="CRISPR_52_with_IFNb-parental_HN6_with_IFNb",
+                       car_sig_path=sigpath)
 ```
 
-Finally, DESEQ2 normalization was attempted. This provided the best correction and was selected as the normalization technique.
+## *Sample heatmaps* 
+```{r}
+contrast_id="CRISPR_53_with_IFNb-parental_HN6_with_IFNb"
 
-```{r deseq, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
-#run DESEQ2
-dds <- DESeqDataSetFromMatrix(countData = counts(set),
-                              colData = pData(set),
-                              design = ~ x)
-dds <- DESeq(dds)
+# ALL GENES
+sigpath=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230223/",
+             "contrast_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53.csv")
+sample_sub_list=c("parental_HN6_with_IFNb_2","parental_HN6_with_IFNb_3",
+                  "CRISPR_53_with_IFNb_1","CRISPR_53_with_IFNb_3")
+generate_replicate_heatmaps_rna(contrast_id=contrast_id,
+                            scale_flag="ON",
+                            sample_subset=sample_sub_list,
+                            car_sig_path=sigpath,
+                            gene_list_name="")
+
+# subsets of gene lists
+gene_list_options=c("APM_INFA")
+for (genelistID in gene_list_options){
+  generate_replicate_heatmaps_rna(contrast_id=contrast_id,
+                                  scale_flag="ON",
+                                  sample_subset=sample_sub_list,
+                                  car_sig_path=sigpath,
+                                  gene_list_name=genelistID)
+}
 ```
 
-```{r norm_plot, echo=FALSE}
-par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
-plotRLE(counts(dds, normalize=TRUE), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
-plotPCA(counts(dds,normalize=TRUE), col=colors[x], cex=.8)
-mtext("Fig. DESEq2 Normalization", side=2, outer=TRUE, adj=0)
+
+## **Volcano Plots**
+
+Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
+
+### CRISPR_52_with_IFNb {.tabset}
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_volcano_plots(data_type="RNA",
+                       contrast_id="CRISPR_52_with_IFNb-parental_HN6_with_IFNb",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
-The data used for downstream analysis was DESEQ2 normalized and comparisons were made between samples.
-
-```{r deg_run, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
-treatment="CRISPR_52_with_IFNb"
-deg_group_add(cntrl,treatment)
-
-treatment="CRISPR_53_with_IFNb"
-deg_group_add(cntrl,treatment)
+### CRISPR_53_with_IFNb {.tabset}
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_volcano_plots(data_type="RNA",
+                       contrast_id="CRISPR_53_with_IFNb-parental_HN6_with_IFNb",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
 ## **Heatmaps**
@@ -211,74 +213,6 @@ heatmap_df=create_heatmap_df(merged_fc,"_with_IFNb")
 create_output_df(merged_fc,25,"_with_IFNb")
 ```
 
-## *Sample heatmaps* 
-```{r}
-contrast_id="CRISPR_53_with_IFNb_vs_parental_HN6_with_IFNb"
-
-car_annotation=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230129/",
-                      "peak_annotation_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb.csv")
-car_deeptools=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230129/",
-                     "deeptools_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb.csv")
-
-sample_sub_list=c("CRISPR_53_with_IFNb_1","CRISPR_53_with_IFNb_2","CRISPR_53_with_IFNb_3",
-                  "parental_HN6_with_IFNb_1","parental_HN6_with_IFNb_2","parental_HN6_with_IFNb_3")
-
-sample_sub_list=c("parental_HN6_with_IFNb_2","parental_HN6_with_IFNb_3",
-                  "CRISPR_53_with_IFNb_1","CRISPR_53_with_IFNb_3")
-# ALL GENES
-generate_replicate_heatmaps_rna(contrast_id=contrast_id,
-                            scale_flag="ON",
-                            sample_subset=sample_sub_list)
-# Immune genes
-gene_list_name="APM_INFA"
-gene_list=subset(gene_df,Set %in%  c("APM","IFNalpha"))$Human
-generate_replicate_heatmaps_rna(contrast_id=contrast_id,
-                            scale_flag="ON",
-                            sample_subset=sample_sub_list,
-                            gene_list_subset=gene_list)
-
-gene_list_name="APM"
-gene_list=subset(gene_df,Set %in%  c("APM"))$Human
-generate_replicate_heatmaps_rna(contrast_id=contrast_id,
-                            scale_flag="ON",
-                            sample_subset=sample_sub_list,
-                            gene_list_subset=gene_list)
-
-gene_list_name="INFA"
-gene_list=subset(gene_df,Set %in%  c("IFNalpha"))$Human
-generate_replicate_heatmaps_rna(contrast_id=contrast_id,
-                            scale_flag="ON",
-                            sample_subset=sample_sub_list,
-                            gene_list_subset=gene_list)
-```
-
-## **Volcano Plots**
-
-Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
-
-### CRISPR_52_with_IFNb {.tabset}
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-treatment="CRISPR_52_with_IFNb"
-type_in="FDR"
-generate_volcano_plots_rnaseq(cntrl,treatment,type_in)
-
-contrast_id="CRISPR_52_with_IFNb-parental_HN6_with_IFNb"
-gene_list_name=c("APM","IFNalpha")
-generate_volcano_plots_rna(contrast_id,
-                       gene_list_in="ON")
-```
-
-### CRISPR_53_with_IFNb {.tabset}
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-treatment="CRISPR_53_with_IFNb"
-type_in="FDR"
-generate_volcano_plots_rnaseq(cntrl,treatment,type_in)
-
-contrast_id="CRISPR_53_with_IFNb-parental_HN6_with_IFNb"
-gene_list_name=c("APM","IFNalpha")
-generate_volcano_plots_rna(contrast_id,
-                       gene_list_in="ON")
-```
 
 ## **Enriched Pathways** 
 
