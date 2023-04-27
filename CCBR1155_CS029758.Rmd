@@ -80,7 +80,7 @@ neg_control="HN6_igG_rabbit_1"
 sample_consensus_threshold=0.1
 read_minimum_threshold=10
 
-gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR","Distal")
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
 gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
 
 # reference info
@@ -219,24 +219,6 @@ generate_piecharts(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb")
 generate_piecharts(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb")
 ```
 
-## **Volcano Plots**
-
-Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
-
-### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb {.tabset}
-```{r, v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-generate_volcano_plots(data_type="CAR",
-                       contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
-                       gene_list_name=c("APM","IFNalpha"))
-```
-
-### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb {.tabset}
-```{r, v2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-generate_volcano_plots(data_type="CAR",
-                       contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
-                       gene_list_name=c("APM","IFNalpha"))
-```
-
 ## **Sample Heatmap**
 
 ### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb {.tabset}
@@ -264,8 +246,7 @@ for (genelistID in gene_list_options){
 ```{r, sh2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 sample_sub_list=c("HN6_H4K20me3_IFNb_2","HN6_H4K20me3_IFNb_3",
                   "53_H4K20me3_IFNb_2","53_H4K20me3_IFNb_3")
-rna_path=paste0(parent_dir,"analysis/CS028891/r_analysis_230223/",
-                "replicate_normalized_CRISPR_53_with_IFNb-parental_HN6_with_IFNb.csv")
+
 # ALL GENES
 generate_replicate_heatmaps(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
                            scale_flag="ON",
@@ -280,11 +261,11 @@ for (genelistID in gene_list_options){
                             gene_list_name=genelistID,
                             sample_subset=sample_sub_list)
 }
-# ALL GENES
+# ALL GENES with MRNA data
 generate_replicate_heatmaps(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
                            scale_flag="ON",
                            sample_subset=sample_sub_list,
-                           rna_seq_path=rna_path,
+                           rna_flag="Y",
                            gene_list_name="")
 
 # subsets of gene lists
@@ -293,9 +274,27 @@ for (genelistID in gene_list_options){
   generate_replicate_heatmaps(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
                             scale_flag="ON",
                             gene_list_name=genelistID,
-                            rna_seq_path=rna_path,
+                           rna_flag="Y",
                             sample_subset=sample_sub_list)
 }
+```
+
+## **Volcano Plots**
+
+Volcano plots are created to show the statistical significance (FDR) versus magnitude of change (fold change).
+
+### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb {.tabset}
+```{r, v1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_volcano_plots(data_type="CAR",
+                       contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+                       gene_list_name=c("APM","IFNalpha"))
+```
+
+### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb {.tabset}
+```{r, v2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+generate_volcano_plots(data_type="CAR",
+                       contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+                       gene_list_name=c("APM","IFNalpha"))
 ```
 
 ## *Intensity Boxplots*
@@ -374,36 +373,20 @@ create_venn_diagrams_mult_projs(cs_id_list=c("CS029758","CS031308"),
 )
 ```
 
-
-### Combo between 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb and CS031308 53_INFB_SMYD3_vs_HN6_INFB_SMYD3 
-### AND CS0329689 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb
-
-```{r}
-create_venn_diagrams_mult_projs(cs_id_list=c("CS029758","CS031308","CS029689"),
-                                cs_id_path_list=c(output_dir,
-                                                  paste0(parent_dir,"analysis/CS031308/r_analysis_230307/"),
-                                                  paste0(parent_dir,"analysis/CS029689/r_analysis_230314/")),
-                                contrast_list=c("53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
-                                                "53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
-                                                "5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb"),
-                                sig_filter_list=c("Y","N","N"),
-                                gene_list_name="APM_INFA",
-                                gene_list_to_include="APM_IFNalpha"
-)
-```
-
 ### Combo between 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb and CS031308 53_INFB_SMYD3_vs_HN6_INFB_SMYD3 
 ### AND CS0329689 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb
 
 ```{r}
 create_venn_diagrams_mult_projs(cs_id_list=c("CS029758","CS031308","CS029689"),
                                 cs_id_path_list=c(output_dir,
-                                                  paste0(parent_dir,"analysis/CS031308/r_analysis_230307/"),
-                                                  paste0(parent_dir,"analysis/CS029689/r_analysis_230314/")),
+                                                  paste0(parent_dir,
+                                                         "analysis/CS031308/r_analysis_230307/"),
+                                                  paste0(parent_dir,
+                                                         "analysis/CS029689/r_analysis_230326/")),
                                 contrast_list=c("53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
                                                 "53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
-                                                "5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb"),
-                                sig_filter_list=c("Y","N","N"),
+                                                "53_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb"),
+                                sig_filter_list=c("N","N","N"),
                                 gene_list_name="APM_INFA",
                                 gene_list_to_include="APM_IFNalpha"
 )

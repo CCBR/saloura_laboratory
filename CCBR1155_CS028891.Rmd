@@ -128,17 +128,16 @@ Raw counts are read in and filtered by counts per million reads (CPM). Filtering
 - Finally, DESEQ2 normalization was attempted. This provided the best correction and was selected as the normalization technique.
 
 ```{r qc, echo=FALSE, warning=FALSE, message=FALSE}
-main_prep_qc_rna_core(flag_type="pre_norm")
-
-main_prep_qc_rna_core(flag_type="upper")
-
-main_prep_qc_rna_core(flag_type="DESEQ2")
+flag_types=c("pre_norm","upper","DESEQ2")
+for (f in flag_types){
+  main_prep_qc_rna_core(flag_type=f)
+}
 ```
 
 ```{r}
 # create sig df
 sigpath=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230321_newannotations/",
-                 "contrast_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53.csv")
+                 "contrast_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53D.csv")
 create_sig_RNA_df(contrast_id="CRISPR_53_with_IFNb-parental_HN6_with_IFNb",
                        car_sig_path=sigpath)
 create_sig_RNA_df(contrast_id="CRISPR_52_with_IFNb-parental_HN6_with_IFNb",
@@ -147,13 +146,14 @@ create_sig_RNA_df(contrast_id="CRISPR_52_with_IFNb-parental_HN6_with_IFNb",
 
 ## *Sample heatmaps* 
 ```{r}
+sigpath=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/",
+             "r_analysis_230321_newannotations/",
+             "contrast_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53D.csv")
+sample_sub_list=c("parental_HN6_with_IFNb_2","parental_HN6_with_IFNb_3",
+                  "CRISPR_53_with_IFNb_1","CRISPR_53_with_IFNb_3")
 contrast_id="CRISPR_53_with_IFNb-parental_HN6_with_IFNb"
 
 # ALL GENES
-sigpath=paste0("~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230223/",
-             "contrast_sig_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_PIE53.csv")
-sample_sub_list=c("parental_HN6_with_IFNb_2","parental_HN6_with_IFNb_3",
-                  "CRISPR_53_with_IFNb_1","CRISPR_53_with_IFNb_3")
 generate_replicate_heatmaps_rna(contrast_id=contrast_id,
                             scale_flag="ON",
                             sample_subset=sample_sub_list,

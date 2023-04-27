@@ -47,7 +47,7 @@ USBC Genome Tracks were created for each project. They can be accessed here:
 #paths
 parent_dir="~/../../Volumes/CUTRUN/"
 input_dir = "~/../../Volumes/CUTRUN/analysis/CS029689/"
-output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS029689/r_analysis_230314/"
+output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS029689/r_analysis_230326/"
 output_dir=output_car_dir
 car_subpath=paste0(input_dir,"carlisle_230111/results/peaks/contrasts/")
 img_dir=paste0(output_car_dir,"img/")
@@ -70,7 +70,7 @@ rawcountsprescaled="N"
 sample_consensus_threshold=0.1
 read_minimum_threshold=10
 
-gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR","Distal")
 gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
 
 # reference info
@@ -117,6 +117,9 @@ if (species=="Homo Sapiens"){
 #sed -i "s/ /\\t/g" groups.tab 
 groups_df = read.csv(paste0(input_dir,"groups.tab"),sep="\t",header = FALSE)[,c("V1","V2")]
 colnames(groups_df) = c("sampleid","group")
+for (colid in colnames(groups_df)){
+  groups_df[,colid]=gsub("-","",groups_df[,colid])
+}
 rownames(groups_df)=groups_df$sampleid
 
 ## if there is a subset gene list, select files
@@ -169,20 +172,20 @@ chipseeker_plots(peak_anno)
 Reviewing counts of significant peaks guides analysis parameters downstream.
 ```{r collapsedf, echo=FALSE, warning=FALSE, message=FALSE}
 # create significant peak tables per contrast
-merged_sig_df=create_sig_contrast_df(contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb",
-                                     peak_type="narrowGo_peaks",
-                                     gene_list_name=c("APM","IFNalpha"))
-merged_sig_df=rbind(merged_sig_df,
-                        create_sig_contrast_df(contrast_id="5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb",
-                                               peak_type="broadGo_peaks",
-                                               gene_list_name=c("APM","IFNalpha")))
+create_sig_contrast_df(contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb",
+                       peak_type="narrowGo_peaks",
+                       gene_list_name=c("APM","IFNalpha"))
+create_sig_contrast_df(contrast_id="5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb",
+                       peak_type="broadGo_peaks",
+                       gene_list_name=c("APM","IFNalpha"))
 
 # collapse peaks per sample
-create_collapsed_sample_df(contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb")
-create_collapsed_sample_df(contrast_id="5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb")
+create_collapsed_sample_df(contrast_id="53_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb")
+create_collapsed_sample_df(contrast_id="53_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb")
 
 # collapse significant peak tables per contrast to annotation level
-create_collapsed_contrast_df(merged_sig_df)
+create_collapsed_contrast_df("53_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb")
+create_collapsed_contrast_df("53_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb")
 ```
 
 ## **Peak Distributions**
@@ -191,12 +194,12 @@ Create pie charts per sample, per contrast, and differentiated by +/- log2FC
 
 ### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb {.tabset}
 ```{r, pie1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-generate_piecharts(contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb")
+generate_piecharts(contrast_id="53_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb")
 ```
 
 ### 5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb {.tabset}
 ```{r, pie2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-generate_piecharts(contrast_id="5-3_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb")
+generate_piecharts(contrast_id="53_H3K9me3_IFNb_vs_HN6_H3K9me3_IFNb")
 ```
 
 
@@ -223,15 +226,16 @@ generate_volcano_plots(data_type="CAR",
 
 ### 5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb {.tabset}
 ```{r, box1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
-generate_intensity_boxplot(contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb",
+generate_intensity_boxplot(contrast_id="53_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb",
                            sig_flag="N",
                            gene_list_name="",
                            scale_factor="Y")
 
-generate_intensity_boxplot(contrast_id="5-3_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb",
+generate_intensity_boxplot(contrast_id="53_H3K4me3_IFNb_vs_HN6_H3K4me3_IFNb",
                            sig_flag="N",
                            gene_list_name="APM_INFA",
-                           scale_factor="Y")
+                           scale_factor="Y",
+                           rna_flag="")
 ```
 
 

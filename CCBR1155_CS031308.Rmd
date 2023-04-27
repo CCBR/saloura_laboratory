@@ -46,7 +46,7 @@ rawcountsprescaled="N"
 sample_consensus_threshold=0.1
 read_minimum_threshold=10
 
-gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR")
+gene_bodies_list=c("Promoter","Intron","Exon","5'UTR","3'UTR","Distal")
 gene_bodies_filename=paste(unlist(substr(gene_bodies_list, start = 1, stop = 1)),collapse="")
 
 # reference info
@@ -149,24 +149,24 @@ chipseeker_plots(peak_anno)
 Prepare peak tables for both significantly differentiated and non-significantly differentiated peaks
 ```{r collapsedf, echo=FALSE, warning=FALSE, message=FALSE}
 # create significant peak tables per contrast
-merged_sig_df=create_sig_contrast_df(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
-                                     peak_type="narrowGo_peaks",
-                                     gene_list_name=c("APM","IFNalpha"))
-merged_sig_df=rbind(merged_sig_df,
-                        create_sig_contrast_df(contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1",
+create_sig_contrast_df(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
+                       peak_type="narrowGo_peaks",
+                       gene_list_name=c("APM","IFNalpha"))
+create_sig_contrast_df(contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1",
+                       peak_type="narrowGo_peaks",
+                       gene_list_name=c("APM","IFNalpha"))
+create_sig_contrast_df(contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3",
                                                peak_type="narrowGo_peaks",
-                                               gene_list_name=c("APM","IFNalpha")))
-merged_sig_df=rbind(merged_sig_df,
-                        create_sig_contrast_df(contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3",
-                                               peak_type="narrowGo_peaks",
-                                               gene_list_name=c("APM","IFNalpha")))
+                                               gene_list_name=c("APM","IFNalpha"))
 # collapse peaks per sample
 create_collapsed_sample_df(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3")
 create_collapsed_sample_df(contrast_id="53_INFB_UHRF1_vs_HN6_INFB_UHRF1")
 create_collapsed_sample_df(contrast_id="53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3")
 
 # collapse significant peak tables per contrast to annotation level
-create_collapsed_contrast_df(merged_sig_df)
+create_collapsed_contrast_df("53_INFB_SMYD3_vs_HN6_INFB_SMYD3")
+create_collapsed_contrast_df("53_INFB_UHRF1_vs_HN6_INFB_UHRF1")
+create_collapsed_contrast_df("53_no_INFB_SMYD3_vs_HN6_no_INFB_SMYD3")
 ```
 
 ## **Volcano Plots**
@@ -207,7 +207,8 @@ generate_intensity_boxplot(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
 generate_intensity_boxplot(contrast_id="53_INFB_SMYD3_vs_HN6_INFB_SMYD3",
                            sig_flag="N",
                            gene_list_name="APM_INFA",
-                           scale_factor="Y")
+                           scale_factor="Y",
+                           rna_flag="")
 ```
 
 ### 53_INFB_UHRF1_vs_HN6_INFB_UHRF1 {.tabset}

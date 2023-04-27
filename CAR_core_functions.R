@@ -140,6 +140,49 @@ shorten_sample_id<-function(input_id){
   return(output_id)
 }
 
+CREATE_PEAK_MAP<-function(contrast_id,condition1,condition2){
+  extensions=c(paste0("__",dedup_status,"__",peak_type,".bed"))
+  fpath=paste0(car_subpath,contrast_id,extensions,"/peak_mapping/")
+  
+  # determine sample list
+  sample_list=subset(groups_df, 
+                     group%in%c(condition1,condition2))$sampleid
+  
+  # create df of peakIDs and source peak info from gopeaks
+  peakid_mapped_df=data.frame()
+  for (sid in sample_list){
+    tmp_bed=read.csv(paste0(fpath,sid,"_peakmapped.bed"),sep="\t",header=FALSE)
+    tmp_bed$peakid_contrast=paste0(tmp_bed$V4,":",tmp_bed$V5,"-",tmp_bed$V6)
+    tmp_bed$peakid_sample=paste0(tmp_bed$V1,":",tmp_bed$V2,"-",tmp_bed$V3)
+    
+    # subset
+    tmp_bed=tmp_bed[,c("peakid_contrast","peakid_sample")]
+    
+    # merge based on contrast ID's
+    collapsed_bed=tmp_bed %>% 
+      dplyr::group_by(peakid_contrast) %>% 
+      dplyr::summarise(sid = toString(peakid_sample))
+    
+    # rename cols
+    colnames(collapsed_bed)=c("peakid_contrast",sid)
+    
+    # merge
+    if (nrow(peakid_mapped_df)==0){
+      peakid_mapped_df=collapsed_bed
+    } else{
+      peakid_mapped_df=merge.data.frame(peakid_mapped_df, 
+                                        collapsed_bed, 
+                                        by="peakid_contrast",all=TRUE)
+    }
+    remove(tmp_bed,collapsed_bed)
+  }
+  
+  # set NA to blank
+  peakid_mapped_df[is.na(peakid_mapped_df)]=""
+  
+  return(peakid_mapped_df)
+}
+
 generate_RLE_plot<-function(condition1,condition2,input_data,input_title){
   #set colors
   colors <- brewer.pal(6, "Set2")
@@ -335,7 +378,7 @@ generate_pca_plots<-function(dds,sampleinfo,exclusion_list,contrast_id){
   print(p)
   
   # save final image
-  fpath=paste0(img_dir,"pcoa_",contrast_id,".png")
+  fpath=paste0(img_dir,"pcoa_",gsub("-","",contrast_id),".png")
   ggsave(fpath,p)
 }
 
@@ -364,11 +407,12 @@ generate_ecoli_plots<-function(contrast_id){
   p=ggplot(data=ecoli_df,aes(x=sampleid,y=read_count,fill=groupid)) + 
     geom_bar(stat="identity")
   p_final=p + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
-    ggtitle(paste0("Spike-in control values\n", contrast_id))
+    ggtitle(paste0("Spike-in control values\n", 
+                   gsub("-","",contrast_id)))
   print(p_final)
   
   # save final image
-  fpath=paste0(img_dir,"spikein_control_",contrast_id,".png")
+  fpath=paste0(img_dir,"spikein_control_",gsub("-","",contrast_id),".png")
   ggsave(fpath,p_final)
 }
 
@@ -426,6 +470,8 @@ main_prep_qc_core<-function(contrast_id,exclusion_list="",peak_type){
   #set conditions
   condition1=strsplit(contrast_id,"_vs_")[[1]][1]
   condition2=strsplit(contrast_id,"_vs_")[[1]][2]
+  condition1=gsub("-","",condition1)
+  condition2=gsub("-","",condition2)
   
   # filter based off of params
   sampleinfo=subset(groups_df,group==condition1 | group==condition2)
@@ -434,29 +480,29 @@ main_prep_qc_core<-function(contrast_id,exclusion_list="",peak_type){
   
   # generate rawcounts
   rawcounts=format_counts_matrix(contrast_id,sampleinfo,peak_type)
+  colnames(rawcounts)=gsub("-","",colnames(rawcounts))
   
-  # filter
+  # filter raw counts
   raw_counts=ceiling(rawcounts)
   cpm_counts=edgeR::cpm(as.matrix(rawcounts))
   log_cpm_counts=log2(cpm_counts)
-  
-  if(!exists("sample_consensus_threshold")){
-    sample_consensus_threshold=0.5
-  } 
-  keep=rowSums(cpm_counts>sample_consensus_threshold)>2
-  
+  keep=rowSums(cpm_counts>0.5)>1
   filtered=raw_counts[keep,]
+  
+  # shorten col names
   colnames(filtered)=shorten_sample_id(colnames(filtered))
   
-  fpath=paste0(output_dir,"replicate_prenormalized_",contrast_id,".csv")
+  # save prenormalized peaks
+  fpath=paste0(output_dir,"replicate_prenormalized_",gsub("-","",contrast_id),".csv")
   write.csv(filtered,fpath)
   
   # generate RLE plot
   generate_RLE_plot(condition1,condition2,rawcounts,
-                    paste0("Fig. Before Normalization \n",contrast_id))
+                    paste0("Fig. Before Normalization \n",
+                           gsub("-","",contrast_id)))
   
   # generate boxplots
-  generate_boxplots(sampleinfo,rawcounts,contrast_id)
+  generate_boxplots(sampleinfo,rawcounts,gsub("-","",contrast_id))
   
   # run deseq
   dds=run_deseq_analysis(filtered,sampleinfo)
@@ -486,6 +532,8 @@ main_prep_qc_core<-function(contrast_id,exclusion_list="",peak_type){
   # perform filter calculations
   condition1=strsplit(contrast_id,"_vs_")[[1]][1]
   condition2=strsplit(contrast_id,"_vs_")[[1]][2]
+  condition1=gsub("-","",condition1)
+  condition2=gsub("-","",condition2)
   condition_list=c(condition1,condition2)
   
   for (contrastID in condition_list){
@@ -501,7 +549,7 @@ main_prep_qc_core<-function(contrast_id,exclusion_list="",peak_type){
   }
   
   normalized_annotated=normalized_annotated[!duplicated(normalized_annotated),]
-  fpath=paste0(output_dir,"replicate_normalized_",contrast_id,".csv")
+  fpath=paste0(output_dir,"replicate_normalized_",gsub("-","",contrast_id),".csv")
   write.csv(normalized_annotated,fpath)
   
   # annotate res
@@ -510,8 +558,10 @@ main_prep_qc_core<-function(contrast_id,exclusion_list="",peak_type){
   
   # plot deseq2
   generate_RLE_plot(condition1,condition2,counts(dds, normalize=TRUE),
-                    paste0("Fig. DESEq2 Normalization\n",contrast_id))
-  generate_pca_plots(dds,sampleinfo,exclusion_list,contrast_id)
+                    paste0("Fig. DESEq2 Normalization\n",
+                           gsub("-","",contrast_id)))
+  generate_pca_plots(dds,sampleinfo,exclusion_list,
+                     gsub("-","",contrast_id))
   
   # plot ecoli
   generate_ecoli_plots(contrast_id)
@@ -535,7 +585,7 @@ main_prep_qc_rna_core<-function(flag_type){
   raw_counts=raw_counts[,c("symbol",groups_df$sampleid)]
   
   out_raw_counts=separate(raw_counts,col="symbol",into=c("ENSEMBL","SYMBOL"),sep="[|]")
-  fpath=paste0(output_dir,"replicate_prenormalized_allsamples_",csid,".csv")
+  fpath=paste0(output_dir,"replicate_prenormalized_",csid,".csv")
   write.csv(out_raw_counts,fpath)
   
   ## Filter by CPM
@@ -583,6 +633,37 @@ main_prep_qc_rna_core<-function(flag_type){
                                   design = ~ x)
     dds <- DESeq(dds)
     
+    for (contrastID in unique(contrast_df$contrast)){
+      # add sample filter
+      condition1=strsplit(contrastID,"_vs_")[[1]][1]
+      condition2=strsplit(contrastID,"_vs_")[[1]][2]
+      condition_list=c(condition1,condition2)
+      
+      sample_list=c(subset(contrast_df,contrast==contrastID)$CNTRL,
+                    subset(contrast_df,contrast==contrastID)$TREATMENT)
+      sample_list=subset(groups_df,group %in% sample_list)$sampleid
+      Normalized_counts_matrix<-as.data.frame(counts(dds, norm=TRUE))[,sample_list]
+      
+      for (conditionID in condition_list){
+        sample_list=subset(groups_df,group==conditionID)$sampleid
+        sample_list=gsub("-",".",sample_list)
+        
+        sample_count_threshold=round(length(sample_list)*sample_consensus_threshold+.5)-1
+        Normalized_counts_matrix$read_threshold=rowSums(Normalized_counts_matrix[,sample_list] > (read_minimum_threshold-1))
+        Normalized_counts_matrix$tmp_threshold=ifelse(Normalized_counts_matrix$read_threshold > sample_consensus_threshold,"Y","N")
+        
+        colnames(Normalized_counts_matrix)=gsub("tmp_threshold",
+                                                paste0("sample_threshold_",conditionID),
+                                                colnames(Normalized_counts_matrix))
+      }
+      head(Normalized_counts_matrix)
+      
+      # write out
+      fpath=paste0(output_dir,"replicate_normalized_",contrastID,".csv")
+      write.csv(Normalized_counts_matrix,fpath)
+    }
+    
+    # plot
     par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
     plotRLE(counts(dds, normalize=TRUE), outline=FALSE, ylim=c(-.5, .5), 
             col=colors[x],las=2, cex.axis = .8)
@@ -614,15 +695,17 @@ create_sig_contrast_df<-function(contrast_id,peak_type,gene_list_name="",rna_seq
                "/",contrast_id,extensions,"_",method,"based_diffresults.txt")
   contrast_df=read.csv(fpath,sep = "\t")[,c("peakID","log2FoldChange","padj","pvalue",
                                             "ENSEMBL")]
+  contrast_id=gsub("-","",contrast_id)
   head(contrast_df)
   
   # pull in normalized read counts
   condition1=strsplit(contrast_id,"_vs_")[[1]][1]
   condition2=strsplit(contrast_id,"_vs_")[[1]][2]
+  
   fpath=paste0(output_dir,"replicate_normalized_",contrast_id,".csv")
-  norm_df=read.csv(fpath)[,c("peakID","shortAnno","SYMBOL",
-                             paste0("sample_threshold_",condition1),
-                             paste0("sample_threshold_",condition2))]
+  norm_df=read.csv(fpath)
+  colnames(norm_df)=gsub("X","",colnames(norm_df))
+  colnames(norm_df)=gsub("[.]","_",colnames(norm_df))
   head(norm_df)
   
   norm_contrast_df=merge.data.frame(norm_df,contrast_df,by="peakID")
@@ -657,8 +740,9 @@ create_sig_contrast_df<-function(contrast_id,peak_type,gene_list_name="",rna_seq
   
   # add RNA related data
   if (rna_seq_path != ""){
-    rna_df=read.csv(rna_seq_path)[,c("gene","log2fc","fdr","significance_rna")]
+    rna_df=read.csv(rna_seq_path)[,c("SYMBOL","log2fc","fdr","significance_rna")]
     colnames(rna_df)=c("SYMBOL","log2FoldChange_rna","padj_rna","flag_rna")
+    rna_df=subset(rna_df,flag_rna %in% c("Y","N"))
     head(rna_df)
     
     final_df=merge.data.frame(norm_contrast_df,rna_df,by="SYMBOL",all=TRUE)
@@ -702,6 +786,7 @@ create_collapsed_sample_df<-function(contrast_id){
   # read in normalized counts matrix
   fpath=paste0(output_car_dir,"contrast_sig_",contrast_id,"_",gene_bodies_filename,".csv")
   peak_df=read.csv(fpath)
+  colnames(peak_df)=gsub("X","",colnames(peak_df))
   head(peak_df)
   
   # separate contrast
@@ -714,17 +799,20 @@ create_collapsed_sample_df<-function(contrast_id){
   for (conditionID in condition_list){
     # filter peaks based on thresholds
     sub_df=peak_df[peak_df[,paste0("sample_threshold_",conditionID)]=="Y",]
-    sub_df=subset(sub_df,shortAnno %in% gene_bodies_list)
-    nrow(sub_df)
-    
-    # create total of peaks for calcs
-    sub_df$total=nrow(sub_df)
-    
-    # collapse to get shortAnno counts
-    collapsed_df=sub_df %>% dplyr::count(shortAnno,total)
-    
-    #calculate percentages
-    collapsed_df$perc=round((collapsed_df$n/collapsed_df$total)*100,2)
+    if (nrow(sub_df)>0){
+      sub_df=subset(sub_df,shortAnno %in% gene_bodies_list)[-1]
+      
+      # create total of peaks for calcs
+      sub_df$total=nrow(sub_df)
+      
+      # collapse to get shortAnno counts
+      collapsed_df=sub_df %>% dplyr::count(shortAnno,total)
+      
+      #calculate percentages
+      collapsed_df$perc=round((collapsed_df$n/collapsed_df$total)*100,2)
+    } else{
+      collapsed_df=data.frame()
+    }
     
     fpath=paste0(output_car_dir,"replicate_collapsed_annotated_",conditionID,"_",gene_bodies_filename,".csv")
     write.csv(collapsed_df,fpath)
@@ -755,13 +843,13 @@ create_collapsed_contrast_df<-function(contrast_id){
     } else{
       sub_df=subset(sub_df,flag_padj_log2fc_anno==sig_value)
     }
-      
+    
     # create total of peaks for calcs
     sub_df$total=nrow(sub_df)
-      
+    
     # collapse to get shortAnno counts
     collapsed_df=sub_df %>% dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid)
-      
+    
     # get counts for up/down
     collapsed_df$up=0
     collapsed_df$down=0
@@ -769,15 +857,15 @@ create_collapsed_contrast_df<-function(contrast_id){
                       dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid))[,c("sample","shortAnno","n")]
     rownames(tmp_direction1)=tmp_direction1$shortAnno
     tmp_direction2=(subset(sub_df,log2FoldChange<=0) %>%
-                        dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid))[,c("shortAnno","n")]
+                      dplyr::count(sample,shortAnno,dedup,type,method,total,uniqueid))[,c("shortAnno","n")]
     rownames(tmp_direction2)=tmp_direction2$shortAnno
-      
+    
     for (rowid2 in rownames(collapsed_df)){
       collapsed_df[rowid2,"up"]=as.numeric(tmp_direction1[collapsed_df[rowid2,"shortAnno"],"n"])
       collapsed_df[rowid2,"down"]=as.numeric(tmp_direction2[collapsed_df[rowid2,"shortAnno"],"n"])
     }
     collapsed_df[is.na(collapsed_df)] <- 0
-      
+    
     #calculate percentages
     collapsed_df$perc=round((collapsed_df$n/collapsed_df$total)*100,2)
     collapsed_df$perc_up=round((collapsed_df$up/sum(collapsed_df$up))*100,2)
@@ -802,96 +890,68 @@ create_sig_RNA_df<-function(contrast_id,car_sig_path){
   fpath=paste0(input_dir,
                "DEG_",contrast_id,"_0.5_0.5",
                "/DESeq2_DEG_",contrast_id,"_all_genes.txt")
-  rna_df=read.csv(fpath,sep="\t")
+  deg_df=read.csv(fpath,sep="\t")
   
   # add sig of RNA
-  rna_df$significance_rna="N"
-  rna_df$significance_rna[abs(rna_df$log2fc)>log2fc_cutoff & rna_df$fdr<padj_cutoff]="Y"
-  head(rna_df)
-  nrow(rna_df)
+  deg_df$significance_rna="N"
+  deg_df$significance_rna[abs(deg_df$log2fc)>log2fc_cutoff & deg_df$fdr<padj_cutoff]="Y"
+  colnames(deg_df)=gsub("gene","SYMBOL",colnames(deg_df))
+  head(deg_df)
+  nrow(deg_df)
+  unique(deg_df$significance_rna)
   
   ################################################
-  # handle filtered data
+  # handle norm data
   ################################################
-  fpath=paste0(output_dir,"replicate_prenormalized_allsamples_",csid,".csv")
-  unfilt_df=read.csv(fpath)
-  head(unfilt_df)
+  fpath=paste0(output_dir,"replicate_normalized_",gsub("-","_vs_",contrast_id),".csv")
+  norm_df=read.csv(fpath)
+  norm_df=separate(norm_df,col="X",into=c("ENSEMBL","SYMBOL"),sep="[|]")
+  
+  # filter for threshold
+  condition2=strsplit(contrast_id,"-")[[1]][2]
+  norm_df=norm_df[norm_df[,paste0("sample_threshold_",condition2)]=="Y",]
+  head(norm_df)
   
   # add filtered gene list to df for tracking
-  failed_gene_df=subset(unfilt_df,SYMBOL %ni% rna_df$gene)[,c("ENSEMBL","SYMBOL")]
+  failed_gene_df=subset(norm_df,SYMBOL %ni% deg_df$gene)[,c("ENSEMBL","SYMBOL")]
   col_list=c("fc","log2fc","pvalue","fdr","gsea_ranking_score")
   for (colid in col_list){
     failed_gene_df[,colid]<-0
   }
   failed_gene_df$significance_rna="F"
-  colnames(failed_gene_df)=c("ensid_gene","gene",col_list,"significance_rna")
+  colnames(failed_gene_df)=c("ensid_SYMBOL","SYMBOL",col_list,"significance_rna")
   head(failed_gene_df)
+  unique(failed_gene_df$significance_rna)
   
-  # merge dfs
-  rna_df=rbind(rna_df,failed_gene_df)
+  # merge deg_df and failed_gene_df
+  rna_df=rbind(deg_df,failed_gene_df)
   head(rna_df)
+  
+  # merge norm_df and rna_df
+  rna_df=merge.data.frame(norm_df,rna_df,by="SYMBOL")
+  head(rna_df)
+  
   ################################################
   # handle cut and run data
   ################################################
   # car db
-  sig_gene_df=read.csv(car_sig_path)
-  sig_gene_df=subset(sig_gene_df,flag_padj_log2fc_anno=="Y")
-  head(sig_gene_df)
+  car_df=read.csv(car_sig_path)
+  car_df=subset(car_df,flag_padj_log2fc_anno=="Y" & log2FoldChange<0 & shortAnno !="Distal")
+  sig_gene_list=unique(car_df$SYMBOL)
+  car_df=car_df[,c("SYMBOL","flag_padj_log2fc_anno")]
+  car_df=car_df[!duplicated(car_df),]
+  head(car_df)
   
-  # output files
-  fpath=paste0(output_rna_dir,"cut_sig_",contrast_id,".csv")
-  write.csv(sig_gene_df,fpath)
-  
-  # add sig of CUT
-  sub_sig_df=subset(sig_gene_df,flag_padj_log2fc_anno=="Y" &log2FoldChange<0)
-  sig_gene_list=unique(sub_sig_df$SYMBOL)
-  rna_df$significance_car="N"
-  rna_df$significance_car[rna_df$gene %in% sig_gene_list]="Y"
-  head(rna_df)
+  # add car data, clean
+  final_df=merge.data.frame(rna_df,car_df,by="SYMBOL",all=TRUE)
+  final_df=final_df[!is.na(final_df$read_threshold),]
   nrow(rna_df)
-  
-  # add missing CR data
-  missing_df=subset(sub_sig_df,SYMBOL %ni% rna_df$gene)[,c("ENSEMBL","SYMBOL","flag_padj_log2fc_anno")]
-  missing_df=missing_df[!duplicated(missing_df),]
-  col_list=c("fc","log2fc","pvalue","fdr","gsea_ranking_score")
-  for (colid in col_list){
-    missing_df[,colid]<-0
-  }
-  missing_df$significance_rna="M"
-  colnames(missing_df)=c("ensid_gene","gene","significance_car",col_list,"significance_rna")
-  head(missing_df)
-  rna_df=rbind(rna_df,missing_df)
-  head(rna_df)
-  subset(rna_df,significance_rna=="M")
+  nrow(final_df)
+  head(final_df)
   
   # output files
   fpath=paste0(output_rna_dir,"contrast_sig_",contrast_id,".csv")
-  write.csv(rna_df,fpath)
-  
-  ################################################
-  # handle raw counts
-  ################################################
-  # read in counts matrix
-  fpath=paste0(input_dir,
-               "DEG_",gsub("_vs_","-",contrast_id),"_0.5_0.5",
-               "/DESeq2_normalized_counts.txt")
-  counts_matrix=read.csv(fpath,sep="\t")
-  head(counts_matrix)
-  
-  # keep one gene
-  counts_matrix=counts_matrix %>% distinct(gene,.keep_all=TRUE)
-  head(counts_matrix)
-  
-  # add on sig of CUT
-  sig_gene_list=unique(subset(sig_gene_df,flag_padj_log2fc_anno=="Y")$SYMBOL)
-  counts_matrix$significance_car="N"
-  counts_matrix$significance_car[counts_matrix$gene %in% sig_gene_list]="Y"
-  unique(counts_matrix$significance_car)
-  (head(counts_matrix))
-  
-  # output files
-  fpath=paste0(output_rna_dir,"replicate_normalized_",contrast_id,".csv",rownames="")
-  write.csv(counts_matrix,fpath)
+  write.csv(final_df,fpath)
 }
 
 ############################################################
@@ -923,6 +983,9 @@ generate_piecharts<-function(contrast_id){
   #set conditions
   condition1=strsplit(contrast_id,"_vs_")[[1]][1]
   condition2=strsplit(contrast_id,"_vs_")[[1]][2]
+  condition1=gsub("-","_",condition1)
+  condition2=gsub("-","_",condition2)
+  
   plot_id=c("1.)","2.)")
   counter=1
   
@@ -931,23 +994,24 @@ generate_piecharts<-function(contrast_id){
   for (conditionID in c(condition1,condition2)){
     # read in filtered collapsed,df
     fpath=paste0(output_car_dir,"replicate_collapsed_annotated_",conditionID,"_",gene_bodies_filename,".csv")
-    collapsed_df=read.csv(fpath)
-    head(collapsed_df)
-    
-    # determine posiiton for pie charts
-    tmp_df <- collapsed_df %>% 
-      mutate(csum = rev(cumsum(rev(n))), 
-             pos = n/2 + lead(csum, 1),
-             pos = if_else(is.na(pos), n/2, pos))
-    
-    # plot
-    fpath=paste0(img_dir,"sample_piechart_",conditionID,"_",gene_bodies_filename,".pdf")
-    plot_title=paste0("Annotation of peaks for condition: ",conditionID,
-                      " (N=",unique(tmp_df$total),")")
-    p1=plot_pies_collapsed(collapsed_df,tmp_df,"n","perc",plot_id[counter],plot_title,fpath)
-    print(p1)
-    
-    print(DT::datatable(tmp_df))
+    if(file.size(fpath) > 3){
+      collapsed_df=read.csv(fpath)
+      # determine position for pie charts
+      tmp_df <- collapsed_df %>% 
+        mutate(csum = rev(cumsum(rev(n))), 
+               pos = n/2 + lead(csum, 1),
+               pos = if_else(is.na(pos), n/2, pos))
+      tmp_df$pos=if_else(is.na(tmp_df$pos), tmp_df$n/2, tmp_df$pos)
+      
+      # plot
+      fpath=paste0(img_dir,"sample_piechart_",conditionID,"_",gene_bodies_filename,".pdf")
+      plot_title=paste0("Annotation of peaks for condition: ",conditionID,
+                        " (N=",unique(tmp_df$total),")")
+      p1=plot_pies_collapsed(collapsed_df,tmp_df,"n","perc",plot_id[counter],plot_title,fpath)
+      print(p1)
+      
+      print(DT::datatable(tmp_df))
+    }
     counter=counter+1
   }
   
@@ -962,6 +1026,7 @@ generate_piecharts<-function(contrast_id){
     mutate(csum = rev(cumsum(rev(n))), 
            pos = n/2 + lead(csum, 1),
            pos = if_else(is.na(pos), n/2, pos))
+  tmp_df$pos=if_else(is.na(tmp_df$pos), tmp_df$n/2, tmp_df$pos)
   
   # plot
   fpath=paste0(img_dir,"contrast_piechart_annotated_",contrast_id,"_",gene_bodies_filename,".pdf")
@@ -982,6 +1047,7 @@ generate_piecharts<-function(contrast_id){
     mutate(csum = rev(cumsum(rev(n))), 
            pos = n/2 + lead(csum, 1),
            pos = if_else(is.na(pos), n/2, pos))
+  tmp_df$pos=if_else(is.na(tmp_df$pos), tmp_df$n/2, tmp_df$pos)
   
   ## all sig peaks
   fpath=paste0(img_dir,"contrast_piechart_sigpeaks_",contrast_id,"_",gene_bodies_filename,".pdf")
@@ -995,6 +1061,8 @@ generate_piecharts<-function(contrast_id){
     mutate(csum = rev(cumsum(rev(up))), 
            pos = up/2 + lead(csum, 1),
            pos = if_else(is.na(pos), up/2, pos))
+  tmp_df$pos=if_else(is.na(tmp_df$pos), tmp_df$n/2, tmp_df$pos)
+  
   fpath=paste0(img_dir,"contrast_piechart_sigpeaks_up_",contrast_id,"_",gene_bodies_filename,".pdf")
   plot_title=paste0(contrast_id,"\n",
                     "Significant Peaks by Annotation (N=",sum(collapsed_df$up),")\n",
@@ -1007,6 +1075,8 @@ generate_piecharts<-function(contrast_id){
     mutate(csum = rev(cumsum(rev(down))), 
            pos = down/2 + lead(csum, 1),
            pos = if_else(is.na(pos), down/2, pos))
+  tmp_df$pos=if_else(is.na(tmp_df$pos), tmp_df$n/2, tmp_df$pos)
+  
   fpath==paste0(img_dir,"contrast_piechart_sigpeaks_down_",contrast_id,"_",gene_bodies_filename,".pdf")
   plot_title=paste0(contrast_id,"\n",
                     "Significant Peaks by Annotation (N=",sum(collapsed_df$down),")\n",
@@ -1282,7 +1352,7 @@ plot_heat_map<-function(df_in,show_names="ON",title_in="",cluster_by_rows="ON",f
 
 # fix scale_flag
 generate_replicate_heatmaps<-function(contrast_id,scale_flag,gene_list_name,
-                                      sample_subset="",rna_seq_path=""){
+                                      sample_subset="",rna_flag="N"){
   #contrast_id=contrast_id;scale_flag="ON";sample_subset=sample_sub_list;gene_list_name=""
   
   # split contrast
@@ -1290,50 +1360,61 @@ generate_replicate_heatmaps<-function(contrast_id,scale_flag,gene_list_name,
   contrast_2=strsplit(contrast_id,"_vs_")[[1]][2]
   
   # read in normalized counts matrix and save peaks df
-  fpath=paste0(output_dir,"replicate_normalized_",contrast_id,".csv")
+  fpath=paste0(output_dir,
+               "contrast_sig_",contrast_id,"_",gene_bodies_filename,".csv")
   counts_matrix=read.csv(fpath)
   colnames(counts_matrix)=gsub("X","",colnames(counts_matrix))
+  print("**Pulling normalized data")
+  print(paste0("--Total number of peaks: ", nrow(counts_matrix)))
+  print(paste0("--Total number unique genes: ", length(unique(counts_matrix$SYMBOL))))
   
-  # subset for samples, if needed
-  if (length(sample_subset)>1){
-    print("**Subsetting based on sample_list provided")
-    # create sample_list
-    sample_list=sample_subset
-  } else{
-    print("**All samples are included")
-    sample_list=subset(groups_df,group%in% c(contrast_1,contrast_2))$sampleid
-  }
+  # subset for only HN6
+  hn6_only=counts_matrix[counts_matrix[,paste0("sample_threshold_",contrast_2)]=="Y",]
+  print(paste0("**Subsetting for ", contrast_2))
+  print(paste0("--Total number of peaks: ", nrow(hn6_only)))
+  print(paste0("--Total number unique genes: ", length(unique(hn6_only$SYMBOL))))
   
-  # pull rowname
-  rownames(counts_matrix)=counts_matrix$peakID
-  counts_matrix=counts_matrix[,c(sample_list,"SYMBOL","shortAnno")]
-  head(counts_matrix)
-  nrow(counts_matrix)
+  # subset without downstream
+  no_downstream=subset(hn6_only,shortAnno!="Downstream")
+  print(paste0("**Subsetting for ", contrast_2))
+  print(paste0("--Total number of peaks: ", nrow(no_downstream)))
+  print(paste0("--Total number unique genes: ", length(unique(no_downstream$SYMBOL))))
   
-  # read in sig peaks list
-  fpath=paste0(output_dir,"contrast_sig_",contrast_id,"_",gene_bodies_filename,".csv")
-  sig_df=read.csv(fpath)
-  sig_peak_list=subset(sig_df,flag_padj_log2fc_anno=="Y")$peakID
-  head(sig_peak_list)
-  length(sig_peak_list)
+  # subset for sig peaks
+  sig_peak_list=subset(no_downstream,flag_padj_log2fc_anno=="Y")$peakID
+  sig_only=subset(no_downstream,peakID %in% sig_peak_list)
+  print("**Subsetting for Sig genes")
+  print(paste0("--Total number of peaks: ", nrow(sig_only)))
+  print(paste0("--Total number unique genes: ", length(unique(sig_only$SYMBOL))))
   
-  # subset for gene list
-  counts_matrix_subset=counts_matrix[sig_peak_list,]
-  head(counts_matrix_subset)
-  nrow(counts_matrix_subset)
+  # subset for down
+  down_only=subset(sig_only,log2FoldChange<0)
+  print("**Subsetting for Down only")
+  print(paste0("--Total number of peaks: ", nrow(down_only)))
+  print(paste0("--Total number unique genes: ", length(unique(down_only$SYMBOL))))
   
-  # if needed subset for RNA gene list
-  if (rna_seq_path!=""){
+  # subset for down, intragenic
+  intragen_only=subset(down_only,shortAnno != "Distal")
+  print("**Subsetting for intragenic genes")
+  print(paste0("--Total number of peaks: ", nrow(intragen_only)))
+  print(paste0("--Total number unique genes: ", length(unique(intragen_only$SYMBOL))))
+  
+  # subset for RNA genes
+  if (rna_flag=="Y"){
     print("**Subsetting for RNA genes")
-    rna_df=read.csv(rna_seq_path)
-    genes_in_rna=unique(rna_df$gene)
+    rna_genes_list=subset(intragen_only,flag_rna %in% c("Y","N"))$SYMBOL
     
-    print(paste0("-- N peaks before filtering ",nrow(counts_matrix_subset)))
-    counts_matrix_subset=subset(counts_matrix_subset,SYMBOL %in%genes_in_rna)
-    print(paste0("-- N peaks after filtering ",nrow(counts_matrix_subset)))
+    # subset
+    counts_matrix_subset=subset(intragen_only,SYMBOL %in% rna_genes_list)
+    
+    # print
+    print(paste0("--Total number of peaks: ", nrow(counts_matrix_subset)))
+    print(paste0("--Total number unique genes: ", length(unique(counts_matrix_subset$SYMBOL))))
+  } else{
+    counts_matrix_subset=intragen_only
   }
   
-  # if needed, subset for immune gene list
+  # subset for immune gene list
   if (gene_list_name!=""){
     print("**Subsetting based on gene_list provided")
     
@@ -1346,27 +1427,33 @@ generate_replicate_heatmaps<-function(contrast_id,scale_flag,gene_list_name,
       gene_list_subset=subset(gene_df,Set %in% c("APM"))$Human
     }
     
-    # subset for these genes
+    # subset
     counts_matrix_subset=subset(counts_matrix_subset,SYMBOL %in% gene_list_subset)
     
-    print(paste0("--Total number of peaks: ", nrow(counts_matrix_subset)))
-    print(paste0("--Total number of genes: ", length(counts_matrix_subset$SYMBOL)))
-    
-    # keep only one instance per symbol
-    #print(paste0("--Total number unique genes: ", length(unique(counts_matrix_subset$SYMBOL))))
-    #counts_matrix_subset=counts_matrix_subset[!duplicated(counts_matrix_subset$SYMBOL), ]
-    #print(paste0("--Total number of peaks after subsetting only unique genes: ", nrow(counts_matrix_subset)))
-    
-    # rename rows for printing
-    rownames(counts_matrix_subset)=make.unique(paste0(counts_matrix_subset$SYMBOL," (",counts_matrix_subset$shortAnno,")"))
-  } else{
-    print("**Using all genes")
+    # print
     print(paste0("--Total number of peaks: ", nrow(counts_matrix_subset)))
     print(paste0("--Total number unique genes: ", length(unique(counts_matrix_subset$SYMBOL))))
+    
+  } else{
+    print("**Using all genes")
   }
   
-  # subset for only counts
+  # subset for samples, if needed
+  if (length(sample_subset)>1){
+    print("**Subsetting based on sample_list provided")
+    # create sample_list
+    sample_list=sample_subset
+  } else{
+    print("**All samples are included")
+    sample_list=subset(groups_df,group %in% c(contrast_1,contrast_2))$sampleid
+  }
+  
+  # add rownames for immune print
+  rownames(counts_matrix_subset)=make.unique(paste0(counts_matrix_subset$SYMBOL," (",counts_matrix_subset$shortAnno,")"))
+  
+  # prep df
   counts_matrix_subset=counts_matrix_subset[,sample_list]
+  head(counts_matrix_subset)
   
   # scale if necessary
   if (scale_flag=="ON"){
@@ -1425,35 +1512,26 @@ generate_replicate_heatmaps<-function(contrast_id,scale_flag,gene_list_name,
 }
 
 # creates heatmap for multiple replicates in RNASeq data
-generate_replicate_heatmaps_rna<-function(contrast_id,scale_flag,gene_list_name,sample_subset="",
-                                          car_sig_path){
+generate_replicate_heatmaps_rna<-function(contrast_id,scale_flag,gene_list_name,
+                                          sample_subset="",car_sig_path){
   # split contrast
   contrast_1=strsplit(contrast_id,"-")[[1]][1]
   contrast_2=strsplit(contrast_id,"-")[[1]][2]
   
   # read in counts matrix
-  fpath=paste0(output_rna_dir,"replicate_normalized_",contrast_id,".csv")
+  fpath=paste0(output_rna_dir,"contrast_sig_",contrast_id,".csv")
   counts_matrix=read.csv(fpath,sep=",")
-  
-  # split EID and SYMBOL
-  counts_matrix=separate(counts_matrix,col="X",into=c("ENSEMBL","SYMBOL"),sep="[|]")
-  
-  # subset for samples, if needed
-  if (length(sample_subset)>1){
-    sample_list=sample_subset
-    counts_matrix=counts_matrix[,c("SYMBOL","significance_car",sample_list)]
-    print(head(counts_matrix))
-  } else{
-    sample_list=subset(groups_df,group%in% c(contrast_1,contrast_2))$sampleid
-  }
+  head(counts_matrix)
+  print(paste0("--Total number unique genes: ", length(unique(counts_matrix$SYMBOL))))
   
   # pull rowname
   rownames(counts_matrix)=make.unique(counts_matrix$SYMBOL)
   head(counts_matrix)
   
   # subset for sig gene list
-  counts_matrix_subset=subset(counts_matrix,significance_car=="Y")
-  head(counts_matrix_subset)
+  print("**Filter for CAR sig")
+  counts_matrix_subset=subset(counts_matrix,flag_padj_log2fc_anno=="Y")
+  print(paste0("--Total number unique genes: ", length(unique(counts_matrix_subset$SYMBOL))))
   
   # subset for pi gene list, if needed
   if (gene_list_name!=""){
@@ -1479,8 +1557,45 @@ generate_replicate_heatmaps_rna<-function(contrast_id,scale_flag,gene_list_name,
     print(paste0("--Total number unique genes: ", length(unique(counts_matrix_subset$SYMBOL))))
   }
   
-  # subset for only counts
+  # clean duplicate values
+  out_dir=data.frame()
+  for (symbolid in unique(counts_matrix_subset$SYMBOL)){
+    # subset for SYMBOL
+    sub_df=subset(counts_matrix_subset,SYMBOL==symbolid)
+    
+    # pull all sig flags
+    sig_flags=sub_df$significance_rna
+    
+    # keep row based on order Y > N > F > M
+    match_y=match(c("Y"),sig_flags)
+    match_n=match(c("N"),sig_flags)
+    match_f=match(c("F"),sig_flags)
+    match_m=match(c("M"),sig_flags)
+    
+    if (!is.na(match_y)){
+      out_dir=rbind(out_dir,sub_df[match_y,])
+    } else if (!is.na(match_n)){
+      out_dir=rbind(out_dir,sub_df[match_n,])
+    }
+  }
+  nrow(out_dir)
+  rownames(out_dir)=out_dir$SYMBOL
+  counts_matrix_subset=out_dir
+  
+  # subset for samples
+  if(length(sample_subset)>1){
+    print("**Subsetting based on sample_list provided")
+    # create sample_list
+    sample_list=sample_subset
+  } else{
+    print("**All samples are included")
+    sample_list=subset(groups_df,group %in% c(contrast_1,contrast_2))$sampleid
+  }
   counts_matrix_subset=counts_matrix_subset[,sample_list]
+  
+  # clean df
+  counts_matrix_subset=counts_matrix_subset[!duplicated(counts_matrix_subset),]
+  nrow(counts_matrix_subset)
   
   # scale, if needed
   if (scale_flag=="ON"){
@@ -1536,18 +1651,30 @@ generate_replicate_heatmaps_rna<-function(contrast_id,scale_flag,gene_list_name,
 ############################################################
 # chipintensity boxplots for sample replicates
 ############################################################
-generate_intensity_boxplot<-function(contrast_id,sig_flag="",gene_list_name="",scale_factor=""){
+generate_intensity_boxplot<-function(contrast_id,sig_flag="",gene_list_name="",
+                                     scale_factor="", rna_flag=""){
   #sig_flag="N";gene_list_name="";scale_factor="Y"
   
   # split contrast
   contrast_1=strsplit(contrast_id,"_vs_")[[1]][1]
   contrast_2=strsplit(contrast_id,"_vs_")[[1]][2]
-  condition_list=c(contrast_1,contrast_2)
+  contrast_1=gsub("-","_",contrast_1)
+  contrast_2=gsub("-","_",contrast_2)
   
-  # read in normalized counts matrix and save peaks df
-  fpath=paste0(output_dir,"replicate_normalized_",contrast_id,".csv")
+  condition_list=c(contrast_1,contrast_2)
+  sample_list=subset(groups_df,group%in% c(contrast_1,contrast_2))$sampleid
+  sample_list=gsub("-",".",sample_list)
+  
+  # read in normalized counts matrix, contrast info and save peaks df
+  fpath=paste0(output_dir,"contrast_sig_",contrast_id,"_",gene_bodies_filename,".csv")
   counts_matrix=read.csv(fpath)
   colnames(counts_matrix)=gsub("X","",colnames(counts_matrix))
+  print(paste0("--Number of peaks included: ", nrow(counts_matrix)))
+  
+  # subset
+  print("**Filtering for intragenic peaks")
+  counts_matrix=subset(counts_matrix,shortAnno!="Distal")
+  print(paste0("--Number of peaks included: ", nrow(counts_matrix)))
   
   #define rownames
   rownames(counts_matrix)=counts_matrix$peakID
@@ -1555,25 +1682,21 @@ generate_intensity_boxplot<-function(contrast_id,sig_flag="",gene_list_name="",s
   # filter for significant peaks
   if (sig_flag=="Y"){
     print("**Filtering for significant peaks")
-    
-    # read in sig peaks list
-    fpath=paste0(output_dir,"contrast_sig_",contrast_id,"_",gene_bodies_filename,".csv")
-    sig_df=read.csv(fpath)
-    sig_peak_list=subset(sig_df,flag_padj_log2fc_anno=="Y")$peakID
-    
-    counts_matrix_subset=counts_matrix[sig_peak_list,]
+    counts_matrix_subset=subset(counts_matrix,flag_padj_log2fc_anno=="Y")
     head(counts_matrix_subset)
+    print(paste0("--Number of peaks included: ", nrow(counts_matrix_subset)))
   } else{
     counts_matrix_subset=counts_matrix
   } 
   
-  # annotate and filter, if needed
+  # filter for immune genes
   if (gene_list_name=="APM_INFA"){
     print("**Filtering based on gene_list provided")
     
     # subset for these genes
     gene_list_subset=subset(gene_df,Set %in% c("APM","IFNalpha"))$Human
     counts_matrix_subset=subset(counts_matrix_subset,SYMBOL %in% gene_list_subset)
+    print(paste0("--Number of peaks included: ", nrow(counts_matrix_subset)))
     
     # set fpath
     fpath_i=paste0(img_dir,"sample_boxplot_",gene_list_name,"_",
@@ -1587,29 +1710,31 @@ generate_intensity_boxplot<-function(contrast_id,sig_flag="",gene_list_name="",s
                    contrast_id,"_",gene_bodies_filename,".csv")
   }
   
-  print(paste0("Number of peaks included: ", nrow(counts_matrix_subset)))
+  # filter for rna genes
+  if (rna_flag=="Y"){
+    print("**Filtering based on RNA provided")
+    counts_matrix_subset=subset(counts_matrix_subset,flag_rna %in% c("Y","N"))
+    print(paste0("--Number of peaks included: ", nrow(counts_matrix_subset)))
+  }
   
   # create average counts by sample
   print("**Analyzing samples")
   for (conditionID in condition_list){
-    print(paste0("--",conditionID))
     # create sample_list
     sample_list=subset(groups_df,group%in% c(conditionID))$sampleid
     sample_list=gsub("-",".",sample_list)
-    
+    print(sample_list)
     # subset df
     tmp_df=counts_matrix_subset[,sample_list]
     
     # add one to all
     tmp_df=tmp_df+1
-    print(head(tmp_df))
     
     # create mean col
     mean_col_name=paste0("mean_",conditionID)
     counts_matrix_subset[,mean_col_name]=rowMeans(tmp_df)
     
     # create log10 cols
-    print(head(counts_matrix_subset[,mean_col_name]))
     log_col_name=paste0("log10_",conditionID)
     counts_matrix_subset[,log_col_name]=log10(counts_matrix_subset[,mean_col_name])
   }
@@ -1789,27 +1914,44 @@ generate_intensity_boxplot_two_projs<-function(contrast_id1,csid2,csid2_path,con
 # venn diagrams
 ############################################################
 # read in file, filter for sig genes, in gene list, if necessary
-PREP_VENN_DIAGRAM<-function(fpath_in,sig_filter_list,gene_list_in){
+PREP_VENN_DIAGRAM<-function(fpath_in,sig_filter_list,gene_list_in,contrast_id){
   # fpath_in=fpath; gene_list_in=gene_list_to_include; sig_filter_list=sig_filter_list[2]
+  
+  # split contrast
+  contrast_1=strsplit(contrast_id,"_vs_")[[1]][1]
+  contrast_2=strsplit(contrast_id,"_vs_")[[1]][2]
   
   # read in sig df
   df_in=read.csv(fpath_in)
+  print(paste0("--N genes: ", length(unique(df_in$SYMBOL))))
   
   # filter for sig
   if (sig_filter_list=="N"){
-    df_sub=subset(df_in,log2FoldChange<0)
+    df_sub=df_in
   } else{
+    print("**Filtering for sig")
     df_sub=subset(df_in,flag_padj_log2fc_anno=="Y")
+    print(paste0("--N genes: ", length(unique(df_sub$SYMBOL))))
   }
   
   # filter for gene list, if needed
   if (gene_list_in!=""){
+    print("**Filtering for gene list")
     # gene list from pi df
     gene_list=subset(gene_df,Set %in% strsplit(gene_list_in,"_")[[1]])$Human
     
     # subset df
     df_sub=subset(df_sub,SYMBOL %in% gene_list)
+    print(paste0("--N genes: ", length(unique(df_sub$SYMBOL))))
   }
+  
+  print("**Filtering for HN6 baseline")
+  df_sub=df_sub[df_sub[,paste0("sample_threshold_",contrast_2)]=="Y",]
+  print(paste0("--N genes: ", length(unique(df_sub$SYMBOL))))
+  
+  print("**Filtering for intragenic")
+  df_sub=subset(df_sub,shortAnno != "Distal")
+  print(paste0("--N genes: ", length(unique(df_sub$SYMBOL))))
   
   # create gene lists
   list_of_genes=unique(df_sub$SYMBOL)
@@ -1828,19 +1970,22 @@ create_venn_diagrams_mult_projs<-function(cs_id_list,cs_id_path_list,contrast_li
   counter=1; sample_id_merged=""
   for (cs_num in cs_id_list){
     # set contrast and path of sig file
-    fpath=paste0(cs_id_path_list[counter],"contrast_sig_",contrast_list[counter],"_",gene_bodies_filename,".csv")
+    fpath=paste0(cs_id_path_list[counter],"contrast_sig_",
+                 contrast_list[counter],"_",gene_bodies_filename,".csv")
     
     # split file to include 53 only
-    var_name=strsplit(contrast_list[counter],"_vs_")[[1]][1]
+    var_name=strsplit(contrast_list[counter],"_vs_")[[1]][2]
     var_name=gsub("-","",var_name)
     var_name=gsub("_IFNb","",var_name)
     var_name=gsub("_INFB","",var_name)
     
     # create list, assign to sampleid name
-    assign(paste0(var_name,"_list_of_genes"),PREP_VENN_DIAGRAM(fpath,sig_filter_list[counter],gene_list_to_include))
-    
-    # check
-    print(paste0("Number of genes found in ", contrast_list[counter], " is: ", length(get(paste0(var_name,"_list_of_genes")))))
+    print(paste0("**Sample ", contrast_list[counter]))
+    assign(paste0(var_name,"_list_of_genes"),
+           PREP_VENN_DIAGRAM(fpath_in=fpath,
+                             sig_filter_list=sig_filter_list[counter],
+                             gene_list_in=gene_list_to_include,
+                             contrast_id=contrast_list[counter]))
     
     # merge id for fpath out
     if (sample_id_merged==""){
@@ -1913,13 +2058,13 @@ create_venn_diagrams_mult_projs<-function(cs_id_list,cs_id_path_list,contrast_li
                      sample_id_merged,"_",gene_bodies_filename,".pdf")
     dfpath_out=paste0(img_dir,"venndiagram_",
                       sample_id_merged,"_",gene_bodies_filename,".csv")
-    full_title=paste0("Differentiated Genes")
+    full_title=paste0("Baseline Genes")
   } else{
     fpath_out=paste0(img_dir,"venndiagram_",
                      sample_id_merged,"_",gene_list_name,"_",gene_bodies_filename,".pdf")
     dfpath_out=paste0(img_dir,"venndiagram_",
                       sample_id_merged,"_",gene_list_name,"_",gene_bodies_filename,".csv")
-    full_title=paste0("Differentiated Genes in ",gene_list_name, " genes")
+    full_title=paste0("Baseline Genes in ",gene_list_name, " genes")
   }
   
   # write out df

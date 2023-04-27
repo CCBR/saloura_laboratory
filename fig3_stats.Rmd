@@ -154,6 +154,15 @@ print(paste0("N genes with mrna down: ",
              immune_mrna_genes_down, " ", immune_mrna_genes_down_perc))
 print(paste0("N genes with mrna neutral: ",
              immune_mrna_genes_neutral, " ", immune_mrna_genes_neutral_perc))
+
+# output df for deeptools to use
+out_df=data.frame(mrna_immune_df$peakID)
+out_df = tidyr::separate(out_df,"mrna_immune_df.peakID",c("chr","loc"),":")
+out_df = tidyr::separate(out_df,"loc",c("start","end"),"-")
+
+fpath=paste0(output_dir,
+             "contrast_deeptools_53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb_rna_immune_PIE53.bed")
+write.table(out_df,fpath)
 ```
 
 # Fig Stats
@@ -193,7 +202,7 @@ immune_mrna_genes_neutral
 
 ## New stats
 
-The total number of peaks identified in HN6 cells was `r total_raw_peaks`. Of these peaks, the majority (`r down_peaks` peaks, `r down_peaks_perc`% of total at baseline) were significantly decreased in the SMYD3 KO cells (FDRr 0.05), suggesting that SMYD3 has a predominant role as a positive regulator of H4K20me3 genomic deposition (Fig.3B). `r intergenic_peaks_perc` of the differentially decreased peaks were distributed in intergenic regions and `r intragenic_down_peaks_perc`% in intragenic regions, including `r intron_down_peaks_perc`% in introns, `r exon_down_peaks_perc`% in exons, and the remainder in promoters, TSS, 5’UTR and 3’UTR regions (Fig. 3B). We further focused our analysis on intragenic regions, given that the intragenic presence of H4K20me3 could directly contribute to the transcriptional repression of these genes. `r intragenic_genes_all` genes were annotated to `r intragenic_peaks_all` H4K20me3 intragenic peaks overlapping with promoters, TSS, gene body and UTR regions, and of these genes, most of them (`r intragenic_genes_down` genes) were annotated to decreased H4K20me3 peaks (Supplementary Fig. 17A). Among these genes, `r cutrun_rna_peaks` were annotated to `r cutrun_rna_genes` differential H4K20me3 peaks and had evaluable RNA-seq data (Fig.3C, left panel, Supplementary Fig. 17B). Of these `r cutrun_rna_genes` genes, `r mrna_genes_up_perc`% (`r mrna_genes_up`) demonstrated increased mRNA expression, signifying that SMYD3-mediated H4K20me3 is important in repressing these genes. `r mrna_genes_down_perc`% of these genes (`r mrna_genes_down`) had decreased mRNA expression, and `r mrna_genes_neutral_perc` (`r mrna_genes_neutral`) showed no expression changes (FDRr 0.1, absolute log2FC > 1.3) (Fig.3C, right panel).
+The total number of peaks identified in HN6 cells was `r total_raw_peaks`. Of these peaks, the majority (`r down_peaks` peaks, `r down_peaks_perc`% of total at baseline) were significantly decreased in the SMYD3 KO cells (FDR<0.05), suggesting that SMYD3 has a predominant role as a positive regulator of H4K20me3 genomic deposition (Fig.3B). `r intergenic_peaks_perc`% of the differentially decreased peaks were distributed in intergenic regions and `r intragenic_down_peaks_perc`% in intragenic regions, including `r intron_down_peaks_perc`% in introns, `r exon_down_peaks_perc`% in exons, and the remainder in promoters, TSS, 5’UTR and 3’UTR regions (Fig. 3B). We further focused our analysis on intragenic regions, given that the intragenic presence of H4K20me3 could directly contribute to the transcriptional repression of these genes. `r intragenic_genes_all` genes were annotated to `r intragenic_peaks_all` H4K20me3 intragenic peaks overlapping with promoters, TSS, gene body and UTR regions, and of these genes, most of them (`r intragenic_genes_down` genes) were annotated to decreased H4K20me3 peaks (Supplementary Fig. 17A). Among these genes, `r cutrun_rna_genes` were annotated to `r cutrun_rna_peaks` differential H4K20me3 peaks and had evaluable RNA-seq data (Fig.3C, left panel, Supplementary Fig. 17B). Of these `r cutrun_rna_genes` genes, `r mrna_genes_up_perc`% (`r mrna_genes_up`) demonstrated increased mRNA expression, signifying that SMYD3-mediated H4K20me3 is important in repressing these genes. `r mrna_genes_down_perc`% of these genes (`r mrna_genes_down`) had decreased mRNA expression, and `r mrna_genes_neutral_perc` (`r mrna_genes_neutral`) showed no expression changes (FDRr 0.1, absolute log2FC > 1.3) (Fig.3C, right panel).
 
 Amongst the `r intragenic_down_genes` genes with decreased H4K20me3 peaks, `r immune_genes` immune-related genes were annotated to `r immune_peaks` decreased H4K20me3 peaks (Supplementary Fig. 17C, Fig. 3E, Supplementary Table 5). Of these, `r immune_mrna_genes` genes were annotated to `r immune_mrna_peaks` differential H4K20me3 peaks and had evaluable RNA-seq data available (Fig.3D, left panel, Supplementary Fig.17D), and `r immune_mrna_genes_up_perc`% (`r immune_mrna_genes_up`) were upregulated, `r immune_mrna_genes_down_perc`% (`r immune_mrna_genes_down`) were downregulated and `r immune_mrna_genes_neutral_perc`% (`r immune_mrna_genes_neutral`) were unaltered (Fig. 3D, right panel).
 
