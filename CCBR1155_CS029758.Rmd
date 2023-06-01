@@ -53,15 +53,17 @@ USBC Genome Tracks were created for each project. They can be accessed here:
 #paths
 parent_dir="~/../../Volumes/CUTRUN/"
 input_dir = "~/../../Volumes/CUTRUN/analysis/CS029758/"
-output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230321_newannotations/"
+output_car_dir = "~/../../Volumes/CUTRUN/analysis/CS029758/r_analysis_230427_newannotations/"
 output_dir=output_car_dir
 
 car_subpath=paste0(input_dir,"carlisle_230111/results/peaks/contrasts/")
 bed_subpath=paste0(input_dir,"carlisle_230111/results/peaks/gopeaks/")
 
 img_dir=paste0(output_car_dir,"img/")
+data_dir=paste0(output_car_dir,"datafiles/")
 dir.create(file.path(output_car_dir), showWarnings = FALSE)
 dir.create(file.path(img_dir), showWarnings = FALSE)
+dir.create(file.path(data_dir), showWarnings = FALSE)
 cs_id="CS029758"
 ```
 
@@ -169,16 +171,14 @@ Reviewing sample QC allows us to determine if there are outliers present in anal
 
 #### 53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb
 ```{r qc1, echo=FALSE, warning=FALSE, message=FALSE}
-peak_anno=main_prep_qc_core(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
+main_prep_qc_core(contrast_id="53_H3K27me3_IFNb_vs_HN6_H3K27me3_IFNb",
                             peak_type="broadGo_peaks")
-chipseeker_plots(peak_anno)
 ```
 
 #### 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb
 ```{r qc2, echo=FALSE, warning=FALSE, message=FALSE}
-peak_anno=main_prep_qc_core(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
+main_prep_qc_core(contrast_id="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb",
                             peak_type="broadGo_peaks")
-chipseeker_plots(peak_anno)
 ```
 
 ## **Data Processing**

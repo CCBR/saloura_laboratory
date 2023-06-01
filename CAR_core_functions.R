@@ -7,96 +7,6 @@ shorten_names<-function(list_in){
   return(shortened_names)
 }
 
-################################################################################
-# manual annotation
-################################################################################
-## only for project CS029758 with sample 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb
-fix_annotations<-function(pa,peak_to_swap,EID,SYMBOL,ANNO,GENENAME){
-  tmp_row=subset(pa,peakID==peak_to_swap)
-  tmp_row$ENSEMBL=EID
-  tmp_row$SYMBOL=SYMBOL
-  tmp_row$shortAnno=ANNO
-  tmp_row$GENENAME=GENENAME
-  pa[rownames(tmp_row),]=tmp_row
-  return(pa)
-}
-
-fix_annotations_main<-function(input_df){
-  # CMPK2 – being assigned to NRIR’s promoter
-  ##https://www.ncbi.nlm.nih.gov/gene/129607
-  input_df=fix_annotations(input_df,
-                           peak_to_swap="chr2:6840000-6852000",
-                           EID="ENSG00000134326",
-                           SYMBOL="CMPK2",
-                           ANNO="Promoter",
-                           GENENAME="cytidine/uridine monophosphate kinase 2")
-  
-  # TRIM5 – being assigned to TRIM22’s promoter
-  ## https://www.ncbi.nlm.nih.gov/gene/85363
-  input_df=fix_annotations(input_df,
-                           peak_to_swap ="chr11:5679000-5693000",
-                           EID="ENSG00000132256",
-                           SYMBOL="TRIM5",
-                           ANNO="Promoter",
-                           GENENAME="tripartite motif containing 5")
-  
-  # LPAR6 - being assigned to 5’UTR of RB1
-  ## https://www.ncbi.nlm.nih.gov/gene/10161
-  input_df=fix_annotations(input_df,
-                           peak_to_swap="chr13:48412000-48432000",
-                           EID="ENSG00000139679",
-                           SYMBOL="LPAR6",
-                           ANNO="Intron",
-                           GENENAME="lysophosphatidic acid receptor 6")
-  
-  # SAMD9L – being assigned to the promoter of SAMD9
-  ## https://www.ncbi.nlm.nih.gov/gene/219285
-  input_df=fix_annotations(input_df,
-                           peak_to_swap="chr7:93097000-93179000",
-                           EID="ENSG00000177409",
-                           SYMBOL="SAMD9L",
-                           ANNO="Promoter",
-                           GENENAME="sterile alpha motif domain containing 9 like")
-  
-  # IFI44  – being assigned to the  of IFI44L
-  ## https://www.ncbi.nlm.nih.gov/gene/10561
-  input_df=fix_annotations(input_df,
-                           peak_to_swap="chr1:78606000-78672000",
-                           EID="ENSG00000137965",
-                           SYMBOL="IFI44",
-                           ANNO="Promoter",
-                           GENENAME="interferon induced protein 44")
-  
-  #  HLA-G	– being assigned to the 5' UTR of HCP5B
-  ## https://www.ncbi.nlm.nih.gov/gene/3135
-  input_df=fix_annotations(input_df,
-                           peak_to_swap="chr6:29824000-29832000",
-                           EID="ENSG00000204632",
-                           SYMBOL="HLA-G",
-                           ANNO="Promoter",
-                           GENENAME="major histocompatibility complex, class I, G")
-  
-  #  HLA-A – being assigned to the Exon of HCP5B
-  ## https://www.ncbi.nlm.nih.gov/gene/3105
-  input_df=fix_annotations(input_df,
-                           peak_to_swap="chr6:29932000-29941000",
-                           EID="ENSG00000206503",
-                           SYMBOL="HLA-A",
-                           ANNO="Promoter",
-                           GENENAME="major histocompatibility complex, class I, A")
-  
-  # RFX5 – being assigned to the promoter of RFX5-AS1
-  ## https://www.ncbi.nlm.nih.gov/gene/5993
-  input_df=fix_annotations(input_df,
-                           peak_to_swap="chr1:151346000-151356000",
-                           EID="ENSG00000143390",
-                           SYMBOL="RFX5",
-                           ANNO="Intron",
-                           GENENAME="regulatory factor X5")
-  
-  return(input_df)
-}
-
 ############################################################
 # QC Analysis
 ############################################################
@@ -140,7 +50,7 @@ shorten_sample_id<-function(input_id){
   return(output_id)
 }
 
-CREATE_PEAK_MAP<-function(contrast_id,condition1,condition2){
+CREATE_PEAK_MAP<-function(contrast_id,condition1,condition2,peak_type){
   extensions=c(paste0("__",dedup_status,"__",peak_type,".bed"))
   fpath=paste0(car_subpath,contrast_id,extensions,"/peak_mapping/")
   
@@ -329,13 +239,7 @@ peak_annotation<-function(result_dds,contrast_id){
   pa$shortAnno[pa$shortAnno=="3'"]="3'UTR"
   pa$peakID = paste0(pa$seqnames,":",pa$start,"-",pa$end)
   
-  # perform manual change of annotations due to viewing on tracks
-  ## only for project CS029758 with sample 53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb
-  if (cs_id=="CS029758" && contrast_id=="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"){
-    pa = fix_annotations_main(pa)
-  }
-  
-  return(peakAnno)
+  return(pa)
 }
 
 generate_pca_plots<-function(dds,sampleinfo,exclusion_list,contrast_id){
@@ -416,7 +320,10 @@ generate_ecoli_plots<-function(contrast_id){
   ggsave(fpath,p_final)
 }
 
-GET_UPDATED_ANNOTATIONS<-function(df_in){
+############################################################
+# Annotations
+############################################################
+GET_UPDATED_ANNOTATIONS_CHIPSEEK<-function(df_in){
   # df_in=anno_df
   
   # generate list of ENST ID's
@@ -465,6 +372,173 @@ GET_UPDATED_ANNOTATIONS<-function(df_in){
   return(df_out)
 }
 
+GET_GENE_BODY_BOUNDARY<-function(gene.symbol.list, promoter_span=2000){
+  library(biomaRt);
+  print("--prepping by gene boundry")
+  ensembl <- useEnsembl(biomart = 'genes', dataset = "hsapiens_gene_ensembl")
+  mart <- biomaRt::useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+  gene_info.0 <- biomaRt::getBM(attributes = c("hgnc_symbol", "chromosome_name", "start_position", "end_position", "strand"),
+                                filters = "hgnc_symbol",
+                                values = gene.symbol.list,
+                                mart = mart)
+  gene_info<-gene_info.0[gene_info.0$chromosome_name %in% c(1:22,'X','Y'),]
+  
+  genes<-c();
+  chr<-c();
+  st<-c();
+  ed<-c();
+  strand<-c();
+  st.bd<-c();
+  ed.bd<-c();
+  
+  for(gg in unique( sort(gene_info$hgnc_symbol))){
+    gg.min.loc<-min(gene_info[gene_info$hgnc_symbol == gg,'start_position'])
+    gg.max.loc<-min(gene_info[gene_info$hgnc_symbol == gg,'end_position'])
+    gg.strand<-unique(gene_info[gene_info$hgnc_symbol == gg,'strand'])
+    gg.chr<-unique(gene_info[gene_info$hgnc_symbol == gg,'chromosome_name'])
+    
+    if(length(gg.strand)>1){ stop('Cannot continue without updating code.')}
+    
+    genes<-c(genes, gg)
+    chr<-c(chr, gg.chr)
+    st<-c(st, gg.min.loc)
+    ed<-c(ed, gg.max.loc)
+    strand<-c(strand, gg.strand)
+    
+    if(gg.strand==-1){
+      st.bd<-c(st.bd, gg.min.loc);
+      ed.bd<-c(ed.bd, gg.max.loc+promoter_span);
+    } else {
+      if(gg.min.loc-promoter_span>0){
+        st.bd<-c(st.bd, gg.min.loc-promoter_span);
+      } else {
+        st.bd<-c(st.bd, 1);
+      }
+      ed.bd<-c(ed.bd, gg.max.loc);
+    }
+  }
+  
+  gene_bd<-data.frame(genes, chr, st, ed, strand, st.bd, ed.bd)
+  rownames(gene_bd)<-genes
+  
+  re<-{}
+  re$version<-listDatasets(ensembl)[grep('hsapiens_gene_ensembl',
+                                         listDatasets(ensembl)$dataset),]
+  re$gene_info<-gene_info
+  re$gene_bd<-gene_bd
+  re$promoter_span<-promoter_span
+  
+  # save RE
+  fpath=paste0(output_dir,"ifn.app.annot.db.RData")
+  save(re, file=fpath)
+  return(re)
+}
+
+ANNOTATE_BY_GB<-function(re,cnts.raw.master.annot, goi.ifn, goi.apm){
+  library(hash)
+  library(GenomicRanges)
+  
+  print("--reannotating")
+  p<-cnts.raw.master.annot
+  goi<-re$gene_bd
+  
+  # set GRANGES obj
+  gr.p<-GRanges(seqnames=p$seqnames, 
+                ranges=IRanges(start=p$start, end=p$end, names=p$peakID));
+  gr.goi<-GRanges(seqnames=paste0('chr',goi$chr), 
+                  ranges=IRanges(start=goi$st.bd, end=goi$ed.bd, names=goi$genes));
+  
+  # ifnd overlaps with new immune annotations
+  fo.goi.p<-GenomicRanges::findOverlaps(gr.goi, gr.p)
+  
+  #sep into dfs
+  goi.p.goiind<-data.frame(fo.goi.p)$queryHits
+  goi.p.pind<-data.frame(fo.goi.p)$subjectHits
+  matched.goi.p<-data.frame(goi.p.goiind, goi.p.pind)
+  
+  # ID matches
+  genes<-names(gr.goi)[matched.goi.p$goi.p.goiind]
+  peaks<-names(gr.p)[matched.goi.p$goi.p.pind]
+  
+  # create new df of matches
+  p2g<-data.frame(peaks, genes)
+  
+  # create hash key and reset gene info
+  p2g.hs<-hash(keys=p2g$peaks, values=p2g$genes)
+  for(pp in p2g$peaks[duplicated(p2g$peaks)]){
+    .set(p2g.hs, keys=pp, 
+         values=unique(sort( c(p2g[p2g$peaks %in% pp, 'genes'], 
+                               p2g.hs[[pp]])) ) )
+  }
+
+  # add flags
+  cnts.raw.master.annot$IFNalpha.flag<-'NO'
+  cnts.raw.master.annot$APM.flag<-'NO'
+  cnts.raw.master.annot$Immune.flag<-'NO'
+  cnts.raw.master.annot$Immune.genes<-NA
+  for(kk in keys(p2g.hs)){
+    cnts.raw.master.annot[kk, 'Immune.genes']<-paste(p2g.hs[[kk]], collapse=':');
+    if (sum( p2g.hs[[kk]] %in% goi.apm) >0){
+      cnts.raw.master.annot[kk,'APM.flag']<-'YES';
+      cnts.raw.master.annot[kk,'Immune.flag']<-'YES';
+    }
+    if( sum( p2g.hs[[kk]] %in% goi.ifn) >0){
+      cnts.raw.master.annot[kk,'IFNalpha.flag']<-'YES';
+      cnts.raw.master.annot[kk,'Immune.flag']<-'YES';
+    }
+    if( sum( p2g.hs[[kk]] %in% goi.apm)==0 & sum( p2g.hs[[kk]] %in% goi.ifn)==0){
+      stop('Cannot continue. Update code at annotate_by_gb.')
+    }
+  }
+  
+  # set output
+  anno.re<-{}
+  anno.re$p2g.hs<-p2g.hs
+  anno.re$p2g<-p2g
+  anno.re$cnts.raw.master.annot<-cnts.raw.master.annot
+  
+  return(anno.re)
+}
+
+GET_UPDATED_ANNOTATIONS_IMMUNE<-function(df_in){
+  
+  # set gene lists
+  goi.ifn<-unique(sort(subset(gene_df,Set=='IFNalpha')$Human))
+  goi.apm<-unique(sort(subset(gene_df,Set=='APM')$Human))
+  gene.symbol.list<-unique(sort(c(goi.ifn, goi.apm)));
+  
+  #------------
+  # retrieve gene boundary (including 2k promoter) 
+  # save as RData file
+  #------------
+  re=GET_GENE_BODY_BOUNDARY(gene.symbol.list, promoter_span=2000);
+  
+  #------------
+  # Use annotated data as an input
+  #------------
+  # For example, on the script scripts/_diff_markdown.Rmd
+  # run upto the command below and use results_df as an input
+  # results_df = merge(results_df,pa,by=c("peakID"))
+  #---------------------
+  # run reannotation
+  anno.re<-ANNOTATE_BY_GB(re,df_in, goi.ifn, goi.apm)
+  
+  annot2<-anno.re$cnts.raw.master.annot[,c('peakID','Immune.genes',
+                                           'Immune.flag','IFNalpha.flag','APM.flag')]
+  
+  # save files of all genes with immune notation, just immune notation
+  fpath=paste0(data_dir,"_",contrast_id,"_SKanno.csv")
+  write.csv(annot2, file=fpath, row.names=FALSE)
+  
+  fpath=paste0(data_dir,"_",contrast_id,"_SKanno_immune.csv")
+  write.csv(annot2[!is.na(annot2$Immune.genes),], file=fpath, row.names=FALSE)
+  
+  return(anno.re)
+}
+
+############################################################
+# MAIN FUNCTION for PREP
+############################################################
 main_prep_qc_core<-function(contrast_id,exclusion_list="",peak_type){
   
   #set conditions
@@ -513,8 +587,11 @@ main_prep_qc_core<-function(contrast_id,exclusion_list="",peak_type){
                "/",contrast_id,extensions,"_",method,"based_diffresults.txt")
   anno_df=read.csv(fpath,sep = "\t")
   
+  # update annotations from IMMUNE issue
+  updated_anno=GET_UPDATED_ANNOTATIONS_IMMUNE(anno_df)
+  
   # update annotations from CHIPSEEKER issue
-  anno_df=GET_UPDATED_ANNOTATIONS(anno_df)
+  anno_df=GET_UPDATED_ANNOTATIONS_CHIPSEEK(anno_df)
   anno_df=anno_df[,c("peakID","shortAnno","SYMBOL")]
   head(anno_df)
   
@@ -524,38 +601,72 @@ main_prep_qc_core<-function(contrast_id,exclusion_list="",peak_type){
   normalized_annotated=merge(Normalized_counts_matrix,
                              anno_df[c("peakID","shortAnno","SYMBOL")],
                              by="peakID")
-  if (cs_id=="CS029758" && contrast_id=="53_H4K20me3_IFNb_vs_HN6_H4K20me3_IFNb"){
-    normalized_annotated=fix_annotations_main(normalized_annotated)
-  }
-  head(normalized_annotated)
   
-  # perform filter calculations
+  # generate peakcontrast to map gopeak source file
+  peak_map_df=CREATE_PEAK_MAP(contrast_id,condition1,condition2,peak_type)
+  fpath=paste0(output_dir,"peakmapping_",contrast_id,".txt")
+  write.csv(peak_map_df,fpath)
+  head(peak_map_df)
+  
+  # prepare condition list
   condition1=strsplit(contrast_id,"_vs_")[[1]][1]
   condition2=strsplit(contrast_id,"_vs_")[[1]][2]
   condition1=gsub("-","",condition1)
   condition2=gsub("-","",condition2)
   condition_list=c(condition1,condition2)
   
+  # filter round1
+  ## filter based on read count - ensure that at least the min sample thresholds
+  ## have the reads expected
   for (contrastID in condition_list){
     sample_list=subset(groups_df,group==contrastID)$sampleid
     sample_list=gsub("-",".",sample_list)
     
+    # determine number of reads for each peak; determine if there are more than 
+    # threshold number of samples with that number of reads
     sample_count_threshold=round(length(sample_list)*sample_consensus_threshold+.5)-1
     normalized_annotated$read_threshold=rowSums(normalized_annotated[,sample_list] > (read_minimum_threshold-1))
-    normalized_annotated$tmp_threshold=ifelse(normalized_annotated$read_threshold > sample_consensus_threshold,"Y","N")
+    normalized_annotated$tmp_threshold=ifelse(normalized_annotated$read_threshold > sample_count_threshold,"Y","N")
+    colnames(normalized_annotated)=gsub("tmp_threshold",paste0("sample_read_threshold_",contrastID),colnames(normalized_annotated))
     
-    colnames(normalized_annotated)=gsub("tmp_threshold",paste0("sample_threshold_",contrastID),colnames(normalized_annotated))
     head(normalized_annotated)
   }
   
+  # filter round 2
+  ## determine if source GoPeaks is present in condition2 cells, at least in the
+  ## minimum sample threshold
+  peak_map_counts=data.frame()
+  sample_list=subset(groups_df,group==condition2)$sampleid
+  for (sid in sample_list){
+    peak_map_sub=peak_map_df[,c("peakid_contrast",sid)]
+    peak_map_sub$condition2=ifelse(peak_map_sub[,2] == "",0,1)
+    peak_map_sub=peak_map_sub[,c("peakid_contrast","condition2")]
+    colnames(peak_map_sub)=c("peakID",sid)
+    
+    if (nrow(peak_map_counts)==0){
+      peak_map_counts=peak_map_sub
+    } else{
+      peak_map_counts=merge.data.frame(peak_map_counts,peak_map_sub,
+                                       by="peakID",
+                                       all=TRUE)
+    }
+    remove(peak_map_sub)
+  }
+  peak_map_counts$sampleSum=rowSums(peak_map_counts[,c(2:ncol(peak_map_counts))])
+  head(peak_map_counts)
+  
+  # merge counts with norm data
+  normalized_annotated=merge.data.frame(normalized_annotated, 
+                                        peak_map_counts[,c(1,ncol(peak_map_counts))],
+                                        by="peakID",
+                                        all=TRUE)
+  
+  normalized_annotated[,paste0("sample_enrich_threshold_",condition2)]=ifelse(normalized_annotated$sampleSum > 
+                                              (sample_count_threshold),"Y","N")
   normalized_annotated=normalized_annotated[!duplicated(normalized_annotated),]
   fpath=paste0(output_dir,"replicate_normalized_",gsub("-","",contrast_id),".csv")
   write.csv(normalized_annotated,fpath)
-  
-  # annotate res
-  result_dds <- results(dds)
-  peakAnno=peak_annotation(result_dds,contrast_id)
-  
+
   # plot deseq2
   generate_RLE_plot(condition1,condition2,counts(dds, normalize=TRUE),
                     paste0("Fig. DESEq2 Normalization\n",
